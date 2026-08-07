@@ -2,6 +2,8 @@
 
 A web application for students and organizers to view, rate, and comment on campus events. Built with FastAPI, PostgreSQL, HTMX, and SQLModel.
 
+![Event detail](docs/event-detail.png)
+
 ## Prerequisites
 
 Python 3.13+
