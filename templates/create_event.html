@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Create Event - RateMyCampusEvents</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+    <div class="header">
+        <div class="nav">
+            <div class="logo">📅 RateMyCampusEvents</div>
+            <a href="/{% if token %}?token={{ token }}{% endif %}" style="color: white; text-decoration: none;">
+                ← Back
+            </a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="form-card">
+            <h1>Create New Event</h1>
+            <form method="post" action="/event/create{% if token %}?token={{ token }}{% endif %}">
+                <div class="form-group">
+                    <label>Event Title</label>
+                    <input type="text" name="title" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea name="description" required></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Date &amp; Time</label>
+                    <input type="datetime-local" name="date_time" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Location</label>
+                    <input type="text" name="location" required>
+                </div>
+
+                <button class="btn btn-success">Create Event</button>
+                <a href="/{% if token %}?token={{ token }}{% endif %}" class="btn-secondary"
+                    style="display: inline-block; text-decoration: none; color: white; padding: 12px 24px; border-radius: 4px;">
+                    Cancel
+                </a>
+            </form>
+        </div>
+    </div>
+</body>
+
+</html>

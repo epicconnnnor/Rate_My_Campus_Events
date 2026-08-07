@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>{{ event.title }} - RateMyCampusEvents</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+
+<body>
+    <div class="header">
+        <div class="nav">
+            <div class="logo">📅 RateMyCampusEvents</div>
+            <a href="/{% if token %}?token={{ token }}{% endif %}" style="color: white; text-decoration: none;">
+                ← Back to Events
+            </a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="event-header">
+            <div class="event-title">{{ event.title }}</div>
+            <div class="event-meta">📆 {{ event.date_time }}</div>
+            <div class="event-meta">📍 {{ event.location }}</div>
+            <div class="event-meta">👤 Organized by {{ creator.name if creator else 'Unknown' }}</div>
+            <div class="event-description">{{ event.description }}</div>
+        </div>
+
+        <div class="rating-section">
+            <h2 style="margin-bottom: 24px; color: #2c3e50;">Event Feedback</h2>
+
+            <div id="rating-section">
+                {% include 'fragments/rating_section.html' %}
+            </div>
+        </div>
+        <div class="comments-section">
+            <h2 style="margin-bottom: 24px; color: #2c3e50;">Comments</h2>
+
+            {% if user %}
+            <div class="comment-form">
+                <form hx-post="/htmx/event/{{ event.event_id }}/comment{% if token %}?token={{ token }}{% endif %}"
+                    hx-target="#comments-list" hx-swap="innerHTML" hx-on::after-request="this.reset()">
+                    <textarea name="text" placeholder="Share your thoughts about this event..." required></textarea>
+                    <button type="submit">Post Comment</button>
+                </form>
+            </div>
+            {% endif %}
+
+            <div id="comments-list">
+                {% include 'fragments/comments_list.html' %}
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

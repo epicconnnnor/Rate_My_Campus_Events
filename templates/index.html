@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>RateMyCampusEvents</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+    <div class="header">
+        <div class="nav">
+            <div class="logo">📅 RateMyCampusEvents</div>
+            <div class="nav-links">
+                {% if user %}
+                <span>Hello, {{ user.name }}</span>
+                <a href="/event/create{% if token %}?token={{ token }}{% endif %}" class="btn btn-success">
+                    Create Event
+                </a>
+                <a href="/logout" class="btn">Logout</a>
+                {% else %}
+                <a href="/login" class="btn">Login</a>
+                <a href="/register" class="btn btn-success">Sign Up</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="header-section">
+            <h1>Campus Events</h1>
+        </div>
+
+        {% if events %}
+        <div class="event-grid">
+            {% for event in events %}
+            <div class="event-card">
+                <div class="event-title">{{ event.title }}</div>
+                <div class="event-meta">
+                    📍 {{ event.location }} • 📆 {{ event.date_time }}
+                </div>
+                <div class="event-description">
+                    {{ event.description[:150] }}{% if event.description|length > 150 %}...{% endif %}
+                </div>
+                <div class="event-footer">
+                    <div class="rating-badge">
+                        <span class="rating-value">{{ event.avg_rating }}</span>
+                        <span class="rating-count">{{ event.total_reactions }} ratings</span>
+                    </div>
+                    <a href="/event/{{ event.event_id }}{% if token %}?token={{ token }}{% endif %}" class="btn">
+                        View Details
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <h2>No events yet</h2>
+            <p>Be the first to create an event!</p>
+        </div>
+        {% endif %}
+    </div>
+</body>
+
+</html>

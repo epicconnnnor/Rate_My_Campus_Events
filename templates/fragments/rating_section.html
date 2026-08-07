@@ -1,0 +1,40 @@
+<div class="rating-display">
+    <div class="big-rating">{{ event.avg_rating }}</div>
+    <div class="rating-breakdown">
+        <div class="rating-bar">
+            <div class="rating-icon">👍</div>
+            <div class="bar">
+                <div class="bar-fill">
+                </div>
+            </div>
+            <div class="rating-count">{{ event.thumbs_up }}</div>
+        </div>
+        <div class="rating-bar">
+            <div class="rating-icon">👎</div>
+            <div class="bar">
+                <div class="bar-fill">
+                </div>
+            </div>
+            <div class="rating-count">{{ event.thumbs_down }}</div>
+        </div>
+    </div>
+</div>
+{% if user %}
+<form hx-post="/htmx/event/{{ event.event_id }}/react{% if token %}?token={{ token }}{% endif %}"
+    hx-target="#rating-section" hx-swap="innerHTML">
+    <div class="reaction-buttons">
+        <button type="submit" name="value" value="1"
+            class="reaction-btn {% if user_reaction and user_reaction.value == 1 %}active{% endif %}">
+            👍 Rate Up
+        </button>
+        <button type="submit" name="value" value="-1"
+            class="reaction-btn {% if user_reaction and user_reaction.value == -1 %}active{% endif %}">
+            👎 Rate Down
+        </button>
+    </div>
+</form>
+{% else %}
+<p style="text-align: center; color: #7f8c8d; padding: 20px;">
+    <a href="/login" style="color: #3498db;">Login</a> to rate this event
+</p>
+{% endif %}
