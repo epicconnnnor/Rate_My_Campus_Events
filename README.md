@@ -53,13 +53,25 @@ export DATABASE_HOST="your_host"
 export DATABASE_PORT="5432"
 export DATABASE_NAME="your_database"
 
-### Step 5: Run the Application
+### Step 5: Run Database Migrations
+
+The schema is managed by Alembic, not by the app. Create/update the tables with:
+
+alembic upgrade head
+
+Run this after every `git pull` that touches `migrations/`. Useful extras:
+
+alembic current            # what revision the database is on
+alembic upgrade head --sql # print the SQL without running it
+alembic downgrade -1       # roll back one revision
+
+### Step 6: Run the Application
 
 Start the FastAPI server:
 
 uvicorn app.main:app --reload
 
-### Step 6: Access the Application
+### Step 7: Access the Application
 
 Open your web browser and navigate to:
 

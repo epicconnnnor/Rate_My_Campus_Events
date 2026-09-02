@@ -1,0 +1,9 @@
+Alembic migrations for RateMyCampusEvents.
+
+  alembic upgrade head       # apply everything
+  alembic downgrade -1       # roll back one revision
+  alembic current            # what the database is stamped at
+  alembic upgrade head --sql # print the SQL without running it
+
+The URL is read from app.core.config.DATABASE_URL; export the DATABASE_*
+variables to point at a different database.
