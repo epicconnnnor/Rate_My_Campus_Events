@@ -18,3 +18,9 @@ pgvector==0.4.1
 # RAG - embeddings and chat
 google-genai==1.46.0
 
+# zoneinfo has no tz database of its own on Windows or a slim container
+tzdata==2025.2
+
+# Testing
+pytest==8.4.2
+
