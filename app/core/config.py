@@ -10,13 +10,32 @@ import os
 # JWT CONFIGURATION
 # =============================================================================
 
-# Signs both the JWTs and the OAuth session cookie. The literal below is in
-# git and is therefore public -- set SECRET_KEY in the environment anywhere
-# that matters.
-SECRET_KEY = os.getenv(
-    "SECRET_KEY",
-    "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7",
+# Signs the login tokens and the OAuth session cookie.
+#
+# No default. A signing key committed to the source is not a secret, and the
+# one that used to sit here is in this repository's history, so anyone who has
+# ever seen the repo can mint a valid token with it.
+SECRET_KEY = os.getenv("SECRET_KEY")
+
+SECRET_KEY_MISSING = (
+    "SECRET_KEY is not set.\n\n"
+    "It signs the login tokens and the OAuth session cookie, so the app will "
+    "not start without one. Generate a value:\n\n"
+    '    python -c "import secrets; print(secrets.token_hex(32))"\n\n'
+    "then put it in .env, export it, or set it as a secret wherever this is "
+    "deployed. See .env.example."
 )
+
+
+def require_secret_key() -> str:
+    """The key, or a refusal to continue without one.
+
+    Checked here rather than at import so that the migrations and the ingest,
+    which sign nothing, still run without it.
+    """
+    if not SECRET_KEY:
+        raise RuntimeError(SECRET_KEY_MISSING)
+    return SECRET_KEY
 
 ALGORITHM = "HS256"
 
