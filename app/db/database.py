@@ -10,7 +10,7 @@ from typing import Dict, List, Optional
 
 from app.core.config import DATABASE_URL
 from app.models.event import Comment, Event, Reaction, User
-from sqlmodel import Session, SQLModel, create_engine, select
+from sqlmodel import Session, create_engine, select
 
 # =============================================================================
 # DATABASE ENGINE AND SESSION
@@ -18,10 +18,6 @@ from sqlmodel import Session, SQLModel, create_engine, select
 
 # Create database engine
 engine = create_engine(DATABASE_URL, echo=True)
-
-
-def create_db_and_tables():
-    SQLModel.metadata.create_all(engine)
 
 
 def get_session():

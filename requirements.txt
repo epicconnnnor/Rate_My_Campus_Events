@@ -12,4 +12,5 @@ requests
 # Database - SQLModel (includes SQLAlchemy and Pydantic)
 sqlmodel==0.0.14
 psycopg2-binary
+alembic==1.16.5
 
