@@ -9,6 +9,29 @@
 <body>
     <div class="register-container">
         <h1>📅 Sign Up</h1>
+
+        {% if error %}
+        <div class="auth-error">
+            {% if error == 'exists' %}
+            There's already an account with that email. Try logging in instead.
+            {% else %}
+            Something went wrong creating your account. Try again.
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if providers %}
+        <div class="provider-buttons">
+            {% if 'google' in providers %}
+            <a href="/auth/google" class="btn provider-btn">Continue with Google</a>
+            {% endif %}
+            {% if 'github' in providers %}
+            <a href="/auth/github" class="btn provider-btn">Continue with GitHub</a>
+            {% endif %}
+        </div>
+        <div class="provider-divider"><span>or</span></div>
+        {% endif %}
+
         <form method="post" action="/register">
             <div class="form-group">
                 <label>Name</label>

@@ -566,3 +566,58 @@ textarea {
 .chat-error {
     color: #c0392b;
 }
+
+/* ---------------------- */
+/* SIGN IN WITH A PROVIDER */
+/* ---------------------- */
+
+.provider-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.provider-btn {
+    display: block;
+    text-align: center;
+    padding: 11px;
+    background: white;
+    color: #2c3e50;
+    border: 1px solid #dfe4ea;
+    font-weight: 600;
+}
+
+.provider-btn:hover {
+    background: #f8f9fa;
+    border-color: #b2bec3;
+}
+
+.provider-divider {
+    display: flex;
+    align-items: center;
+    color: #95a5a6;
+    font-size: 13px;
+    margin-bottom: 20px;
+}
+
+.provider-divider::before,
+.provider-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: #eef1f4;
+}
+
+.provider-divider span {
+    padding: 0 12px;
+}
+
+.auth-error {
+    background: #fdecea;
+    color: #c0392b;
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 20px;
+    font-size: 14px;
+}

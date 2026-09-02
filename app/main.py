@@ -1,12 +1,20 @@
 from app.api.routes_auth import router as auth_router
 from app.api.routes_chat import router as chat_router
 from app.api.routes_events import router as events_router
+from app.core.config import SECRET_KEY
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
 
 app = FastAPI(title="RateMyCampusEvents",
               version="0.1.0")
+# Holds the OAuth state between the redirect out and the callback back.
+# Nothing else uses it; the app itself is still authenticated by JWT.
+app.add_middleware(
+    SessionMiddleware, secret_key=SECRET_KEY, same_site="lax", https_only=False
+)
+
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="templates")
 

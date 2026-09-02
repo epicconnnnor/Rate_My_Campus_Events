@@ -4,6 +4,10 @@ jinja2==3.1.6
 python-multipart==0.0.20
 itsdangerous==2.2.0
 
+# OAuth - Google and GitHub sign in
+authlib==1.6.5
+httpx==0.28.1
+
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 bcrypt<4.0.0

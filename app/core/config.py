@@ -10,7 +10,13 @@ import os
 # JWT CONFIGURATION
 # =============================================================================
 
-SECRET_KEY = "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
+# Signs both the JWTs and the OAuth session cookie. The literal below is in
+# git and is therefore public -- set SECRET_KEY in the environment anywhere
+# that matters.
+SECRET_KEY = os.getenv(
+    "SECRET_KEY",
+    "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7",
+)
 
 ALGORITHM = "HS256"
 
@@ -69,3 +75,17 @@ RETRIEVAL_MAX_DISTANCE = float(os.getenv("RETRIEVAL_MAX_DISTANCE", "0.6"))
 
 # How many chat questions one user may ask per calendar day, campus time.
 CHAT_DAILY_LIMIT = int(os.getenv("CHAT_DAILY_LIMIT", "20"))
+
+
+# =============================================================================
+# OAUTH
+# =============================================================================
+
+# Google and GitHub only. Each provider is registered only if both halves of
+# its pair are present, so the app runs fine with neither configured -- the
+# buttons simply do not appear.
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+
+GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID", "")
+GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET", "")

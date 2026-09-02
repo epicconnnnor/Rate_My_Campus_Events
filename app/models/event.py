@@ -23,7 +23,8 @@ class User(SQLModel, table=True):
     user_id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True)
     email: str = Field(unique=True, index=True)
-    password_hash: str
+    # None for accounts that sign in through Google or GitHub.
+    password_hash: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.now)
 
 

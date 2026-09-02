@@ -9,6 +9,33 @@
 <body>
     <div class="login-container">
         <h1>📅 Login</h1>
+
+        {% if error %}
+        <div class="auth-error">
+            {% if error == 'invalid' %}
+            That email and password don't match. If you signed up with Google or GitHub, use the button below.
+            {% elif error == 'email' %}
+            That account has no verified email address, so we can't sign you in with it.
+            {% elif error == 'provider' %}
+            That sign-in option isn't set up on this server.
+            {% else %}
+            Something went wrong signing you in. Try again.
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if providers %}
+        <div class="provider-buttons">
+            {% if 'google' in providers %}
+            <a href="/auth/google" class="btn provider-btn">Continue with Google</a>
+            {% endif %}
+            {% if 'github' in providers %}
+            <a href="/auth/github" class="btn provider-btn">Continue with GitHub</a>
+            {% endif %}
+        </div>
+        <div class="provider-divider"><span>or</span></div>
+        {% endif %}
+
         <form method="post" action="/login">
             <div class="form-group">
                 <label>Email</label>
