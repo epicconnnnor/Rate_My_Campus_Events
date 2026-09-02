@@ -17,7 +17,7 @@ It skips without a key rather than passing on stub vectors.
 
 import pytest
 
-from app.test.conftest import EVAL_TODAY, requires_live_model
+from app.test.conftest import EVAL_TODAY
 
 JUDGE_PROMPT = """\
 You are checking an answer for invented information. You are not judging \
@@ -85,8 +85,7 @@ def test_the_golden_set_exists(golden_questions):
     )
 
 
-@requires_live_model
-def test_every_answer_is_grounded(eval_db, golden_questions):
+def test_every_answer_is_grounded(live_model, eval_db, golden_questions):
     """One judged verdict per golden question, reported together.
 
     Deliberately not parametrized: a run that fails should show every
@@ -126,8 +125,7 @@ def test_every_answer_is_grounded(eval_db, golden_questions):
     )
 
 
-@requires_live_model
-def test_a_question_with_no_possible_answer_invents_nothing(eval_db):
+def test_a_question_with_no_possible_answer_invents_nothing(live_model, eval_db):
     """Not a golden question -- a floor the bot has to clear whatever else it
     does. Nothing on campus is about this, so anything concrete is invented."""
     from app.rag.answer import answer_question
