@@ -6,12 +6,15 @@ writing a migration to match -- nothing creates tables from these definitions
 at runtime any more.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
-from sqlalchemy import Boolean, Column, DateTime, Text
+from pgvector.sqlalchemy import Vector
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, Text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlmodel import Field, SQLModel
+
+from app.core.config import EMBEDDING_DIMENSIONS
 
 
 class User(SQLModel, table=True):
@@ -79,6 +82,15 @@ class Event(SQLModel, table=True):
     keywords: Optional[List[str]] = Field(
         default=None, sa_column=Column(ARRAY(Text), nullable=True)
     )
+    # Organizers, e.g. 'UMass Athletics'. Part of the embedded document.
+    groups: Optional[List[str]] = Field(
+        default=None, sa_column=Column(ARRAY(Text), nullable=True)
+    )
+    # Localist event_types, e.g. 'Lecture/Talk/Reading'. Part of the embedded
+    # document, and the axis a question like "not a lecture" turns on.
+    event_types: Optional[List[str]] = Field(
+        default=None, sa_column=Column(ARRAY(Text), nullable=True)
+    )
     localist_url: Optional[str] = Field(
         default=None, sa_column=Column(Text, nullable=True)
     )
@@ -102,3 +114,36 @@ class Comment(SQLModel, table=True):
     user_id: int = Field(foreign_key="users.user_id")
     text: str
     created_at: datetime = Field(default_factory=datetime.now)
+
+
+class EventEmbedding(SQLModel, table=True):
+    """One embedded document per event, for semantic search.
+
+    `content` is stored alongside the vector so a re-index can tell whether the
+    document actually changed before spending an API call on it.
+    """
+
+    __tablename__ = "event_embeddings"
+
+    embedding_id: Optional[int] = Field(default=None, primary_key=True)
+    event_id: int = Field(
+        sa_column=Column(
+            Integer,
+            ForeignKey("events.event_id"),
+            unique=True,
+            nullable=False,
+        )
+    )
+    content: str = Field(sa_column=Column(Text, nullable=False))
+    embedding: List[float] = Field(
+        sa_column=Column(Vector(EMBEDDING_DIMENSIONS), nullable=False)
+    )
+    # The event's external_updated_at as of the last embed, so a sync that
+    # touched the event can be told apart from one that did not.
+    source_updated_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    embedded_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )

@@ -36,3 +36,27 @@ DATABASE_URL = f"postgresql+psycopg2://{DATABASE_USER}:{DATABASE_PASS}@{DATABASE
 APP_TITLE = "RateMyCampusEvents Demo"
 
 APP_DESCRIPTION = "An app for students/organizers to view, rate, and comment on campus events."
+
+
+# =============================================================================
+# RAG CONFIGURATION
+# =============================================================================
+
+# Which provider backs embeddings and chat. "gemini" for real work; "fake"
+# swaps in a deterministic local stand-in so the indexer can be exercised
+# without an API key or network.
+RAG_PROVIDER = os.getenv("RAG_PROVIDER", "gemini")
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "gemini-embedding-001")
+
+CHAT_MODEL = os.getenv("CHAT_MODEL", "gemini-2.5-flash")
+
+# Baked into the vector column type by migration 0004. Changing it is a schema
+# change plus a full re-index, not a config tweak -- keep the two in step.
+#
+# 1536 rather than the model's native 3072 because pgvector cannot index a
+# vector wider than 2000 dimensions, and gemini-embedding-001 is trained so
+# that a truncated prefix stays useful (Matryoshka).
+EMBEDDING_DIMENSIONS = int(os.getenv("EMBEDDING_DIMENSIONS", "1536"))
