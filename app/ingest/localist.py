@@ -49,6 +49,8 @@ FEED_COLUMNS = (
     "is_free",
     "experience",
     "keywords",
+    "groups",
+    "event_types",
     "localist_url",
     "external_updated_at",
 )
@@ -102,6 +104,12 @@ def _parse_timestamp(value: Optional[str]) -> Optional[datetime]:
     return datetime.fromisoformat(value)
 
 
+def _names(items) -> Optional[List[str]]:
+    """Pull the name off each entry of a Localist name/id list."""
+    names = [item.get("name", "").strip() for item in (items or [])]
+    return [name for name in names if name] or None
+
+
 def _location(raw: Dict) -> Optional[str]:
     parts = [
         (raw.get("location_name") or "").strip(),
@@ -128,6 +136,9 @@ def parse_event(raw: Dict) -> Dict:
         "is_free": raw.get("free"),
         "experience": raw.get("experience"),
         "keywords": raw.get("keywords") or None,
+        "groups": _names(raw.get("groups")),
+        # UMass publishes no departments; event_types is the equivalent axis.
+        "event_types": _names((raw.get("filters") or {}).get("event_types")),
         "localist_url": raw.get("localist_url"),
         "external_updated_at": _parse_timestamp(raw.get("updated_at")),
     }
