@@ -35,7 +35,8 @@ def create_user(user_data: Dict) -> Dict:
         user = User(
             name=user_data["name"],
             email=user_data["email"],
-            password_hash=user_data["password_hash"]
+            # None for provider accounts, which have no password.
+            password_hash=user_data.get("password_hash"),
         )
         session.add(user)
         session.commit()

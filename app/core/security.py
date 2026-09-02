@@ -35,6 +35,10 @@ def authenticate_user(email: str, password: str, get_user_by_email_func) -> Opti
     user = get_user_by_email_func(email)
     if not user:
         return None
+    # A provider-only account has no password to check against, so the password
+    # form can never be the way in.
+    if not user.get("password_hash"):
+        return None
     if not verify_password(password, user["password_hash"]):
         return None
     return user
