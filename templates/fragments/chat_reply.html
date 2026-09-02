@@ -1,0 +1,27 @@
+{% if error %}
+<div class="chat-card chat-error">{{ error }}</div>
+{% else %}
+<div class="chat-card">
+    <div class="chat-question">{{ question }}</div>
+    <div class="chat-answer">{{ answer.text }}</div>
+
+    {% if events %}
+    <div class="chat-events">
+        {% for event in events %}
+        <a class="chat-event" href="/event/{{ event.event_id }}{% if token %}?token={{ token }}{% endif %}">
+            <div class="chat-event-title">{{ event.title }}</div>
+            <div class="event-meta">
+                📆 {{ event.when or 'Date to be announced' }}
+                {% if event.location %} • 📍 {{ event.location }}{% endif %}
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if answer.outcome == 'alternatives' %}
+    <div class="chat-note">Nothing matched exactly, so these are the closest.</div>
+    {% endif %}
+</div>
+<div class="chat-quota-line">{{ used }} of {{ limit }} questions used today</div>
+{% endif %}

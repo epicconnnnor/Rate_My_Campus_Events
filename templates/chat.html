@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Ask about events - RateMyCampusEvents</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+
+<body>
+    <div class="header">
+        <div class="nav">
+            <div class="logo">📅 RateMyCampusEvents</div>
+            <div class="nav-links">
+                <span>Hello, {{ user.name }}</span>
+                <a href="/{% if token %}?token={{ token }}{% endif %}" class="btn">All Events</a>
+                <a href="/logout" class="btn">Logout</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="header-section">
+            <h1>Ask about events</h1>
+            <p class="chat-hint">
+                Try &ldquo;what&rsquo;s on this weekend that isn&rsquo;t a lecture&rdquo;
+                or &ldquo;free things to do next week&rdquo;.
+            </p>
+        </div>
+
+        <div class="chat-card">
+            <form hx-post="/chat{% if token %}?token={{ token }}{% endif %}" hx-target="#chat-reply"
+                hx-swap="innerHTML" hx-disabled-elt="find button">
+                <div class="chat-input-row">
+                    <input type="text" name="question" class="chat-input" autocomplete="off"
+                        placeholder="What's happening on campus?" required>
+                    <button type="submit" class="btn btn-success">Ask</button>
+                </div>
+                <div class="chat-status">
+                    <span class="htmx-indicator chat-spinner">Looking through the calendar&hellip;</span>
+                    <span class="chat-quota">{{ used }} of {{ limit }} questions used today</span>
+                </div>
+            </form>
+        </div>
+
+        <div id="chat-reply"></div>
+    </div>
+
+    <script>
+        // htmx does not swap non-2xx responses by default, but /chat answers
+        // "you're out of questions" and "that broke" with a rendered fragment
+        // and an honest status code. Show those rather than dropping them.
+        document.body.addEventListener('htmx:beforeSwap', function (event) {
+            if ([401, 429, 502].indexOf(event.detail.xhr.status) !== -1) {
+                event.detail.shouldSwap = true;
+                event.detail.isError = false;
+            }
+        });
+    </script>
+</body>
+
+</html>

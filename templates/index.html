@@ -13,6 +13,7 @@
             <div class="nav-links">
                 {% if user %}
                 <span>Hello, {{ user.name }}</span>
+                <a href="/chat{% if token %}?token={{ token }}{% endif %}" class="btn">Ask</a>
                 <a href="/event/create{% if token %}?token={{ token }}{% endif %}" class="btn btn-success">
                     Create Event
                 </a>

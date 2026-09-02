@@ -6,11 +6,11 @@ writing a migration to match -- nothing creates tables from these definitions
 at runtime any more.
 """
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import List, Optional
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, Text
+from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, Text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlmodel import Field, SQLModel
 
@@ -146,4 +146,21 @@ class EventEmbedding(SQLModel, table=True):
     embedded_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+
+
+class ChatUsage(SQLModel, table=True):
+    """How many chat questions a user has asked on a given day.
+
+    A counter, not a log -- the cap is the only thing that needs to know, and
+    what people asked is nobody's business.
+    """
+
+    __tablename__ = "chat_usage"
+
+    usage_id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.user_id")
+    usage_date: date = Field(sa_column=Column(Date, nullable=False))
+    request_count: int = Field(
+        default=0, sa_column=Column(Integer, nullable=False, server_default="0")
     )
