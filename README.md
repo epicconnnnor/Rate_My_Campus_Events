@@ -103,6 +103,13 @@ http://localhost:8000
 
 
 
+## Running the tests
+
+pytest
+
+The retrieval tests stub out the model and the database, so they need neither
+an API key nor a running Postgres.
+
 ## How TO TEST IT
 
 ### 1. Create an Event

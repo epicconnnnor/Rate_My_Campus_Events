@@ -60,3 +60,9 @@ CHAT_MODEL = os.getenv("CHAT_MODEL", "gemini-2.5-flash")
 # vector wider than 2000 dimensions, and gemini-embedding-001 is trained so
 # that a truncated prefix stays useful (Matryoshka).
 EMBEDDING_DIMENSIONS = int(os.getenv("EMBEDDING_DIMENSIONS", "1536"))
+
+# Retrieval tuning. MAX_DISTANCE is a cosine distance, so 0 is identical and 2
+# is opposite; anything above the cutoff is treated as not really an answer.
+# It wants tuning against real embeddings once there is a key to generate them.
+RETRIEVAL_TOP_K = int(os.getenv("RETRIEVAL_TOP_K", "8"))
+RETRIEVAL_MAX_DISTANCE = float(os.getenv("RETRIEVAL_MAX_DISTANCE", "0.6"))
