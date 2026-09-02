@@ -1,0 +1,71 @@
+name: eval
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # No database, no API key, no network. These are the tests that gate a PR.
+      - name: Unit tests
+        run: pytest app/test -v --ignore=app/test/test_hallucinations.py
+
+  hallucinations:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # Not the stock postgres image -- the schema needs the vector extension.
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: eval
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app -d eval"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_USER: app
+      DATABASE_PASS: app
+      DATABASE_HOST: localhost
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: eval
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Migrate
+        run: alembic upgrade head
+
+      # Skips itself if GEMINI_API_KEY is not set on the repository, rather
+      # than failing every fork's pull request.
+      - name: Judge the golden questions
+        run: pytest app/test/test_hallucinations.py -v

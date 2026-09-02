@@ -155,7 +155,7 @@ def _parse_day(value) -> Optional[date]:
         return None
 
 
-def _parse_json_object(raw: str) -> Dict:
+def parse_json_object(raw: str) -> Dict:
     """The model was told to return bare JSON; be forgiving if it fenced it."""
     text = raw.strip()
     if text.startswith("```"):
@@ -186,7 +186,7 @@ def extract_filters(question: str, today: date,
     become a broad search, never an exception and never a bad query.
     """
     raw = chat.complete(build_extraction_prompt(question, today))
-    parsed = _parse_json_object(raw)
+    parsed = parse_json_object(raw)
 
     filters = _default_window(today)
 
