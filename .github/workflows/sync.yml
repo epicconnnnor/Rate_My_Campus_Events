@@ -1,0 +1,36 @@
+name: sync
+
+on:
+  schedule:
+    # 09:00 UTC daily, which is early morning in Amherst year round.
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Ingest Localist events
+        env:
+          DATABASE_USER: ${{ secrets.DATABASE_USER }}
+          DATABASE_PASS: ${{ secrets.DATABASE_PASS }}
+          DATABASE_HOST: ${{ secrets.DATABASE_HOST }}
+          DATABASE_PORT: ${{ secrets.DATABASE_PORT }}
+          DATABASE_NAME: ${{ secrets.DATABASE_NAME }}
+        run: python -m app.ingest.localist
+
+      # The only uptime monitoring there is: if the app is down, this job fails.
+      - name: Health check
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+        run: curl --fail --max-time 30 "$APP_URL/healthz"
