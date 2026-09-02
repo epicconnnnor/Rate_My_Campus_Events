@@ -2,7 +2,7 @@
 
 A web application for students and organizers to view, rate, and comment on campus events. Built with FastAPI, PostgreSQL, HTMX, and SQLModel.
 
-![Event detail](asse/event-detail.png)
+![Event detail](assets/event-detail.png)
 
 ## Prerequisites
 
