@@ -1,7 +1,7 @@
 from app.api.routes_auth import router as auth_router
 from app.api.routes_chat import router as chat_router
 from app.api.routes_events import router as events_router
-from app.core.config import SECRET_KEY
+from app.core.config import require_secret_key
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -9,10 +9,14 @@ from starlette.middleware.sessions import SessionMiddleware
 
 app = FastAPI(title="RateMyCampusEvents",
               version="0.1.0")
+# Checked before anything can be served: a missing key would otherwise only
+# surface at the first login, as a confusing 500.
+_secret_key = require_secret_key()
+
 # Holds the OAuth state between the redirect out and the callback back.
 # Nothing else uses it; the app itself is still authenticated by JWT.
 app.add_middleware(
-    SessionMiddleware, secret_key=SECRET_KEY, same_site="lax", https_only=False
+    SessionMiddleware, secret_key=_secret_key, same_site="lax", https_only=False
 )
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")

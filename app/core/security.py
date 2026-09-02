@@ -7,7 +7,8 @@ Authentication and Security utilities for RateMyCampusEvents v0.1.0.
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
-from app.core.config import ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM, SECRET_KEY
+from app.core.config import (ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM,
+                             require_secret_key)
 from jose import ExpiredSignatureError, JWTError, jwt
 from passlib.context import CryptContext
 
@@ -59,12 +60,12 @@ def create_access_token(data: dict[str, Any], expires_delta: Optional[timedelta]
 
     to_encode.update({"exp": expire})
 
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt.encode(to_encode, require_secret_key(), algorithm=ALGORITHM)
 
 
 def decode_access_token(token: str) -> Optional[dict[str, Any]]:
     try:
-        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return jwt.decode(token, require_secret_key(), algorithms=[ALGORITHM])
     except (ExpiredSignatureError, JWTError):
         return None
 
