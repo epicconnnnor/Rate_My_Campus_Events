@@ -5,11 +5,13 @@ This module provides CRUD operations for the RateMyCampusEvents application.
 Uses SQLModel for ORM and PostgreSQL for persistent storage.
 """
 
+from datetime import date as date_type
 from datetime import datetime
 from typing import Dict, List, Optional
 
 from app.core.config import DATABASE_URL
-from app.models.event import Comment, Event, Reaction, User
+from app.models.event import ChatUsage, Comment, Event, Reaction, User
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, create_engine, select
 
 # =============================================================================
@@ -220,3 +222,37 @@ def get_comment(comment_id: int) -> Optional[Dict]:
     with get_session() as session:
         comment = session.get(Comment, comment_id)
         return comment.model_dump() if comment else None
+
+
+# =============================================================================
+# CHAT USAGE
+# =============================================================================
+
+def record_chat_request(user_id: int, day: date_type) -> int:
+    """Count one question against the user's day and return the new total.
+
+    Done as a single upsert so two tabs cannot both read 19 and both decide
+    they are under the cap.
+    """
+    with get_session() as session:
+        statement = pg_insert(ChatUsage).values(
+            user_id=user_id, usage_date=day, request_count=1
+        )
+        statement = statement.on_conflict_do_update(
+            constraint="uq_chat_usage_day",
+            set_={"request_count": ChatUsage.request_count + 1},
+        ).returning(ChatUsage.request_count)
+
+        total = session.execute(statement).scalar_one()
+        session.commit()
+        return total
+
+
+def get_chat_request_count(user_id: int, day: date_type) -> int:
+    with get_session() as session:
+        statement = select(ChatUsage).where(
+            ChatUsage.user_id == user_id,
+            ChatUsage.usage_date == day,
+        )
+        usage = session.exec(statement).first()
+        return usage.request_count if usage else 0

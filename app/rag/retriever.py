@@ -283,7 +283,7 @@ invent an event, a date, or a detail that is not written above.
 """
 
 
-def _describe(match: Match) -> str:
+def describe_match(match: Match) -> str:
     event = match.event
     when = event.get("starts_at")
     when = when.astimezone(CAMPUS_TZ).strftime("%A %B %d, %I:%M %p") if when else "date unknown"
@@ -296,7 +296,7 @@ def phrase_redirect(question: str, alternatives: List[Match],
     """Let the model write the apology, but only from the list it is given."""
     prompt = REDIRECT_PROMPT.format(
         question=question,
-        alternatives="\n".join(_describe(match) for match in alternatives),
+        alternatives="\n".join(describe_match(match) for match in alternatives),
     )
     return chat.complete(prompt).strip()
 
