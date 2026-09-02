@@ -1,3 +1,36 @@
 {
-  "questions": []
+  "questions": [
+    {
+      "question": "what's happening this weekend?"
+    },
+    {
+      "question": "any free events coming up?",
+      "expect_outcome": "matches"
+    },
+    {
+      "question": "anything virtual I can join from my laptop?",
+      "expect_outcome": "matches"
+    },
+    {
+      "question": "I want to see some art this month",
+      "expect_outcome": "matches"
+    },
+    {
+      "question": "what's on Monday October 12?",
+      "expect_outcome": "alternatives"
+    },
+    {
+      "question": "any free online events?",
+      "expect_outcome": "empty"
+    },
+    {
+      "question": "what's on this weekend that isn't a lecture?"
+    },
+    {
+      "question": "anything funny happening, like comedy or improv?"
+    },
+    {
+      "question": "what does the library have going on?"
+    }
+  ]
 }
