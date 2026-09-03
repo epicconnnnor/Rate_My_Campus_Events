@@ -69,5 +69,17 @@ jobs:
       - name: Migrate
         run: alembic upgrade head
 
+      # Printed as its own step so the model ids are in the job log whatever
+      # the tests do. Inside pytest they are captured at INFO and only surface
+      # on failure, which is exactly when they were missing last time.
+      - name: Resolved models
+        run: |
+          python -c "
+          import logging, sys
+          logging.basicConfig(level=logging.INFO, format='%(message)s', stream=sys.stdout)
+          from app.rag.providers import announce_models
+          announce_models()
+          "
+
       - name: Judge the golden questions
         run: pytest app/test/test_hallucinations.py -v

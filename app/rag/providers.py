@@ -75,7 +75,7 @@ def announce_models() -> None:
 
 
 # =============================================================================
-# QUOTA BACKSTOP
+# RETRYING
 # =============================================================================
 
 # Pacing in the indexer is what keeps us inside the quota. This is only for the
@@ -84,6 +84,15 @@ def announce_models() -> None:
 # retry gives up against a sustained quota refusal, hence our own.
 QUOTA_RETRY_ATTEMPTS = 4
 QUOTA_FALLBACK_DELAY_SECONDS = 20
+
+# A 5xx is a different animal: the request was fine and the far end is simply
+# busy. It carries no retryDelay, only "try again later", so the only sensible
+# answer is to back off and keep asking. 6 attempts of 2s doubling, capped, is
+# about a minute of patience -- long enough to ride out a demand spike, short
+# enough that a real outage still fails the run.
+SERVER_RETRY_ATTEMPTS = 6
+SERVER_BACKOFF_BASE_SECONDS = 2
+SERVER_BACKOFF_CAP_SECONDS = 60
 
 # e.g. "retryDelay": "14.044580725s"
 _RETRY_DELAY = re.compile(r"retry[_-]?delay['\"]?\s*[:=]\s*['\"]?([0-9.]+)s",
@@ -94,6 +103,17 @@ def _is_quota_error(error) -> bool:
     if getattr(error, "code", None) == 429:
         return True
     return "RESOURCE_EXHAUSTED" in str(error)
+
+
+def _is_server_error(error) -> bool:
+    """Busy or broken at the far end, rather than anything about our request."""
+    code = getattr(error, "code", None)
+    if isinstance(code, int) and 500 <= code < 600:
+        return True
+    return any(
+        status in str(error)
+        for status in ("UNAVAILABLE", "INTERNAL", "DEADLINE_EXCEEDED")
+    )
 
 
 def _retry_after(error) -> Optional[float]:
@@ -118,23 +138,63 @@ def _retry_after(error) -> Optional[float]:
     return float(match.group(1)) if match else None
 
 
-def _with_quota_retry(call: Callable):
-    """Run `call`, riding out a 429 rather than failing the whole backfill."""
+def _quota_delay(error, attempt: int) -> float:
+    """Quota: the refusal says how long to wait, so wait that long.
+
+    Guessing when we have been told is pointless, and guessing short just gets
+    refused again. The extra second is slack rather than racing the window.
+    """
+    told = _retry_after(error)
+    if told is not None:
+        return told + 1
+    return QUOTA_FALLBACK_DELAY_SECONDS * attempt
+
+
+def _server_delay(error, attempt: int) -> float:
+    """Server: nothing to go on but "later", so double and cap."""
+    return min(
+        SERVER_BACKOFF_BASE_SECONDS * (2 ** (attempt - 1)),
+        SERVER_BACKOFF_CAP_SECONDS,
+    )
+
+
+def _with_retries(call: Callable):
+    """Run `call`, riding out the two failures that are worth waiting through.
+
+    Quota and capacity are different failure modes and get separate budgets, so
+    a flapping 503 cannot spend the patience reserved for a 429. Anything else
+    -- a bad model id, a malformed request -- is a real failure and raises.
+    """
     from google.genai import errors
 
-    for attempt in range(1, QUOTA_RETRY_ATTEMPTS + 1):
+    quota_attempt = 0
+    server_attempt = 0
+
+    while True:
         try:
             return call()
         except errors.APIError as error:
-            if not _is_quota_error(error) or attempt == QUOTA_RETRY_ATTEMPTS:
+            if _is_quota_error(error):
+                quota_attempt += 1
+                if quota_attempt >= QUOTA_RETRY_ATTEMPTS:
+                    raise
+                kind, delay = "quota", _quota_delay(error, quota_attempt)
+                attempt, budget = quota_attempt, QUOTA_RETRY_ATTEMPTS
+
+            elif _is_server_error(error):
+                server_attempt += 1
+                if server_attempt >= SERVER_RETRY_ATTEMPTS:
+                    raise
+                kind, delay = "server", _server_delay(error, server_attempt)
+                attempt, budget = server_attempt, SERVER_RETRY_ATTEMPTS
+
+            else:
                 raise
-            delay = _retry_after(error)
-            if delay is None:
-                delay = QUOTA_FALLBACK_DELAY_SECONDS * attempt
-            delay += 1  # a second of slack rather than racing the window
+
             log.warning(
-                "quota refused the request; waiting %.1fs then retrying "
-                "(attempt %d of %d)", delay, attempt, QUOTA_RETRY_ATTEMPTS,
+                "%s error from the model; waiting %.1fs then retrying "
+                "(%s attempt %d of %d)",
+                kind, delay, kind, attempt, budget,
             )
             time.sleep(delay)
 
@@ -173,7 +233,7 @@ class GeminiEmbeddingProvider:
     def _embed(self, texts: List[str], task_type: str) -> List[List[float]]:
         from google.genai import types
 
-        response = _with_quota_retry(lambda: self._client.models.embed_content(
+        response = _with_retries(lambda: self._client.models.embed_content(
             model=self._model,
             contents=texts,
             config=types.EmbedContentConfig(
@@ -202,7 +262,7 @@ class GeminiChatProvider:
         self._model = CHAT_MODEL
 
     def complete(self, prompt: str) -> str:
-        response = _with_quota_retry(lambda: self._client.models.generate_content(
+        response = _with_retries(lambda: self._client.models.generate_content(
             model=self._model,
             contents=prompt,
         ))
