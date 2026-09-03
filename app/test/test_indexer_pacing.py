@@ -8,7 +8,10 @@ import pytest
 
 from app.rag import indexer
 from app.rag.indexer import FREE_TIER_DOCUMENTS_PER_MINUTE, _Pacer
-from app.rag.providers import _is_quota_error, _retry_after
+from app.rag.providers import (SERVER_BACKOFF_CAP_SECONDS,
+                               SERVER_RETRY_ATTEMPTS, _is_quota_error,
+                               _is_server_error, _quota_delay,
+                               _retry_after, _server_delay)
 
 
 class FakeClock:
@@ -135,3 +138,68 @@ def test_retry_delay_is_read_from_structured_details_too():
 
 def test_no_retry_delay_means_no_guess_from_the_parser():
     assert _retry_after(FakeError("429 quota exceeded, no advice given")) is None
+
+
+# =============================================================================
+# THE 5XX BACKSTOP
+# =============================================================================
+
+REAL_503 = (
+    "503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is "
+    "currently experiencing high demand. Spikes in demand are usually "
+    "temporary. Please try again later.', 'status': 'UNAVAILABLE'}}"
+)
+
+
+def test_a_503_is_recognised_as_a_server_error():
+    assert _is_server_error(FakeError(REAL_503, code=503))
+
+
+def test_server_errors_are_recognised_by_status_when_there_is_no_code():
+    for status in ("UNAVAILABLE", "INTERNAL", "DEADLINE_EXCEEDED"):
+        assert _is_server_error(FakeError(status, code=None)), status
+
+
+def test_a_quota_refusal_is_not_a_server_error():
+    """They get separate budgets, so they must not both match."""
+    error = FakeError(REAL_429, code=429)
+    assert _is_quota_error(error)
+    assert not _is_server_error(error)
+
+
+def test_a_404_is_neither_and_must_not_be_retried():
+    dead_model = FakeError(
+        "404 NOT_FOUND. This model models/gemini-2.5-flash is no longer "
+        "available to new users.", code=404,
+    )
+    assert not _is_quota_error(dead_model)
+    assert not _is_server_error(dead_model)
+
+
+def test_server_backoff_doubles():
+    delays = [_server_delay(FakeError(REAL_503, code=503), n) for n in range(1, 5)]
+    assert delays == [2, 4, 8, 16]
+
+
+def test_server_backoff_is_capped():
+    assert _server_delay(FakeError(REAL_503, code=503), 20) == SERVER_BACKOFF_CAP_SECONDS
+
+
+def test_the_server_budget_is_about_a_minute_of_patience():
+    """Long enough to outlast a demand spike, short enough that a real outage
+    still fails the run rather than hanging CI."""
+    total = sum(
+        _server_delay(FakeError(REAL_503, code=503), n)
+        for n in range(1, SERVER_RETRY_ATTEMPTS)
+    )
+    assert 30 <= total <= 180
+
+
+def test_the_two_policies_do_not_share_a_delay_calculation():
+    """A 503 carries no retryDelay, so honouring one would mean guessing."""
+    server = FakeError(REAL_503, code=503)
+    assert _retry_after(server) is None
+    assert _server_delay(server, 1) == 2
+
+    quota = FakeError(REAL_429, code=429)
+    assert _quota_delay(quota, 1) == pytest.approx(15.044580725)
