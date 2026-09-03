@@ -27,17 +27,47 @@ QUESTIONS_FILE = FIXTURES / "golden_questions.json"
 EVAL_TODAY = date(2026, 9, 2)
 
 
-def _live_key() -> bool:
+def _have_live_model() -> bool:
     return bool(os.getenv("GEMINI_API_KEY")) and os.getenv(
         "RAG_PROVIDER", "gemini"
     ) != "fake"
 
 
-requires_live_model = pytest.mark.skipif(
-    not _live_key(),
-    reason="needs GEMINI_API_KEY and a non-fake RAG_PROVIDER; "
-           "an eval on stub vectors measures nothing",
-)
+def _key_is_required() -> bool:
+    """Whether a missing key should fail rather than skip.
+
+    Set by CI. A pull request from a fork cannot read the repository's secrets,
+    so it skips; a push or a pull request from a branch in this repository has
+    no excuse.
+    """
+    return os.getenv("EVAL_REQUIRE_LIVE_MODEL", "").strip().lower() == "true"
+
+
+@pytest.fixture(scope="session")
+def live_model():
+    """Gate for the judged tests.
+
+    A skip here used to be indistinguishable from a pass, which is how a secret
+    named GEMINIAPI instead of GEMINI_API_KEY produced a green tick that had
+    judged nothing. Where a key is meant to exist, its absence now fails.
+    """
+    if _have_live_model():
+        return True
+
+    if _key_is_required():
+        pytest.fail(
+            "GEMINI_API_KEY is unset or RAG_PROVIDER=fake, so the judge cannot "
+            "run -- and this is a push or a same-repo pull request, where a key "
+            "is expected. Skipping here would be a green tick certifying "
+            "nothing. Check that the repository secret is named exactly "
+            "GEMINI_API_KEY, matching .github/workflows/eval.yml.",
+            pytrace=False,
+        )
+
+    pytest.skip(
+        "no GEMINI_API_KEY: expected on a fork's pull request, which cannot "
+        "read repository secrets"
+    )
 
 
 @pytest.fixture(scope="session")

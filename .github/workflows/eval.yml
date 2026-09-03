@@ -50,6 +50,10 @@ jobs:
       DATABASE_PORT: "5432"
       DATABASE_NAME: eval
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      # Only a fork's pull request is allowed to skip: it cannot read the
+      # repository's secrets. A push or a same-repo pull request that finds
+      # no key fails, rather than going green having judged nothing.
+      EVAL_REQUIRE_LIVE_MODEL: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
 
     steps:
       - uses: actions/checkout@v4
@@ -65,7 +69,5 @@ jobs:
       - name: Migrate
         run: alembic upgrade head
 
-      # Skips itself if GEMINI_API_KEY is not set on the repository, rather
-      # than failing every fork's pull request.
       - name: Judge the golden questions
         run: pytest app/test/test_hallucinations.py -v
