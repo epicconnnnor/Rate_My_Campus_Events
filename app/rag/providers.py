@@ -45,6 +45,36 @@ class ChatProvider(Protocol):
 
 
 # =============================================================================
+# WHAT WE ARE TALKING TO
+# =============================================================================
+
+_ANNOUNCED = False
+
+
+def announce_models() -> None:
+    """Say which model ids we resolved, once per process.
+
+    A retired model is invisible until a key is fresh: gemini-2.5-flash kept
+    working for existing keys and answered a rotated one with 404 NOT_FOUND,
+    surfacing three layers down inside a retrieval call rather than as anything
+    about models. Naming them up front means the next one identifies itself.
+    """
+    global _ANNOUNCED
+    if _ANNOUNCED:
+        return
+    _ANNOUNCED = True
+
+    if RAG_PROVIDER == "fake":
+        log.info("rag provider=fake -- no model is being called")
+        return
+
+    log.info(
+        "rag provider=%s | embedding=%s (%d dims) | chat=%s",
+        RAG_PROVIDER, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS, CHAT_MODEL,
+    )
+
+
+# =============================================================================
 # QUOTA BACKSTOP
 # =============================================================================
 
@@ -229,6 +259,7 @@ _CHAT_PROVIDERS = {
 
 
 def _build(registry: dict, name: str):
+    announce_models()
     try:
         return registry[name]()
     except KeyError:
