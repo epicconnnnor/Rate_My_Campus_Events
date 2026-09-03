@@ -21,6 +21,7 @@ log = logging.getLogger("providers")
 
 from app.core.config import (
     CHAT_MODEL,
+    JUDGE_MODEL,
     EMBEDDING_DIMENSIONS,
     EMBEDDING_MODEL,
     GEMINI_API_KEY,
@@ -69,9 +70,15 @@ def announce_models() -> None:
         return
 
     log.info(
-        "rag provider=%s | embedding=%s (%d dims) | chat=%s",
+        "rag provider=%s | embedding=%s (%d dims) | chat=%s | judge=%s",
         RAG_PROVIDER, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS, CHAT_MODEL,
+        JUDGE_MODEL,
     )
+    if JUDGE_MODEL == CHAT_MODEL:
+        log.warning(
+            "judge and chat are the same model (%s): they share one daily "
+            "quota, and the judge is reading its own writing", CHAT_MODEL,
+        )
 
 
 # =============================================================================
@@ -251,7 +258,7 @@ class GeminiEmbeddingProvider:
 
 
 class GeminiChatProvider:
-    def __init__(self) -> None:
+    def __init__(self, model: Optional[str] = None) -> None:
         from google import genai
 
         if not GEMINI_API_KEY:
@@ -259,7 +266,7 @@ class GeminiChatProvider:
                 "GEMINI_API_KEY is not set; export it or set RAG_PROVIDER=fake"
             )
         self._client = genai.Client(api_key=GEMINI_API_KEY)
-        self._model = CHAT_MODEL
+        self._model = model or CHAT_MODEL
 
     def complete(self, prompt: str) -> str:
         response = _with_retries(lambda: self._client.models.generate_content(
@@ -299,6 +306,9 @@ class FakeEmbeddingProvider:
 
 
 class FakeChatProvider:
+    def __init__(self, model: Optional[str] = None) -> None:
+        self._model = model or CHAT_MODEL
+
     def complete(self, prompt: str) -> str:
         return "fake completion"
 
@@ -318,10 +328,10 @@ _CHAT_PROVIDERS = {
 }
 
 
-def _build(registry: dict, name: str):
+def _build(registry: dict, name: str, **kwargs):
     announce_models()
     try:
-        return registry[name]()
+        return registry[name](**kwargs)
     except KeyError:
         raise ValueError(
             f"unknown RAG_PROVIDER {name!r}; expected one of {sorted(registry)}"
@@ -333,4 +343,14 @@ def get_embedding_provider(name: str = None) -> EmbeddingProvider:
 
 
 def get_chat_provider(name: str = None) -> ChatProvider:
-    return _build(_CHAT_PROVIDERS, name or RAG_PROVIDER)
+    """The model that answers questions."""
+    return _build(_CHAT_PROVIDERS, name or RAG_PROVIDER, model=CHAT_MODEL)
+
+
+def get_judge_provider(name: str = None) -> ChatProvider:
+    """The model that checks an answer against what retrieval found.
+
+    Separate from the answering model on purpose: its own quota bucket, and a
+    reader that did not write what it is marking.
+    """
+    return _build(_CHAT_PROVIDERS, name or RAG_PROVIDER, model=JUDGE_MODEL)

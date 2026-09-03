@@ -95,9 +95,11 @@ def test_every_answer_is_grounded(live_model, eval_db, golden_questions):
         pytest.skip("no golden questions written yet")
 
     from app.rag.answer import answer_question
-    from app.rag.providers import get_chat_provider
+    from app.rag.providers import get_judge_provider
 
-    chat = get_chat_provider()
+    # Its own model: separate quota bucket, and a reader that did not write
+    # the answer it is marking.
+    judge = get_judge_provider()
     failures = []
 
     for entry in golden_questions:
@@ -112,7 +114,7 @@ def test_every_answer_is_grounded(live_model, eval_db, golden_questions):
             )
             continue
 
-        supported, reason = _judge(question, answer.matches, answer.text, chat)
+        supported, reason = _judge(question, answer.matches, answer.text, judge)
         if not supported:
             failures.append(
                 f"{question!r}\n    judge: {reason}\n"
@@ -129,7 +131,7 @@ def test_a_question_with_no_possible_answer_invents_nothing(live_model, eval_db)
     """Not a golden question -- a floor the bot has to clear whatever else it
     does. Nothing on campus is about this, so anything concrete is invented."""
     from app.rag.answer import answer_question
-    from app.rag.providers import get_chat_provider
+    from app.rag.providers import get_judge_provider
 
     answer = answer_question(
         "is there a scuba diving competition in the library basement?",
@@ -137,6 +139,6 @@ def test_a_question_with_no_possible_answer_invents_nothing(live_model, eval_db)
     )
     supported, reason = _judge(
         "is there a scuba diving competition in the library basement?",
-        answer.matches, answer.text, get_chat_provider(),
+        answer.matches, answer.text, get_judge_provider(),
     )
     assert supported, f"invented something: {reason} -- {answer.text[:300]}"
