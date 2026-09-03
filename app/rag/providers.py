@@ -94,6 +94,10 @@ SERVER_RETRY_ATTEMPTS = 6
 SERVER_BACKOFF_BASE_SECONDS = 2
 SERVER_BACKOFF_CAP_SECONDS = 60
 
+# e.g. "quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+_QUOTA_ID = re.compile(r"quotaId['\"]?\s*[:=]\s*['\"]([^'\"]+)['\"]",
+                       re.IGNORECASE)
+
 # e.g. "retryDelay": "14.044580725s"
 _RETRY_DELAY = re.compile(r"retry[_-]?delay['\"]?\s*[:=]\s*['\"]?([0-9.]+)s",
                           re.IGNORECASE)
@@ -103,6 +107,36 @@ def _is_quota_error(error) -> bool:
     if getattr(error, "code", None) == 429:
         return True
     return "RESOURCE_EXHAUSTED" in str(error)
+
+
+def _quota_ids(error) -> List[str]:
+    """Which allowances the refusal says we broke."""
+    details = getattr(error, "details", None)
+    if isinstance(details, dict):
+        details = details.get("error", {}).get("details")
+
+    found = []
+    if isinstance(details, list):
+        for entry in details:
+            if not isinstance(entry, dict):
+                continue
+            if entry.get("@type", "").endswith("QuotaFailure"):
+                for violation in entry.get("violations") or []:
+                    if isinstance(violation, dict) and violation.get("quotaId"):
+                        found.append(violation["quotaId"])
+
+    return found or _QUOTA_ID.findall(str(error))
+
+
+def _is_daily_quota(error) -> bool:
+    """Whether the allowance we broke resets tomorrow rather than shortly.
+
+    A per-day refusal still carries a retryDelay -- 58 seconds, for a budget
+    that comes back at midnight -- so honouring it spends CI time waiting for
+    something that cannot happen. Per-minute quotas are worth sitting out;
+    per-day ones never are.
+    """
+    return any("perday" in quota_id.lower() for quota_id in _quota_ids(error))
 
 
 def _is_server_error(error) -> bool:
@@ -174,6 +208,14 @@ def _with_retries(call: Callable):
         try:
             return call()
         except errors.APIError as error:
+            if _is_quota_error(error) and _is_daily_quota(error):
+                log.error(
+                    "daily quota exhausted (%s) -- not retrying, it does not "
+                    "come back today",
+                    ", ".join(_quota_ids(error)) or "quota id unknown",
+                )
+                raise
+
             if _is_quota_error(error):
                 quota_attempt += 1
                 if quota_attempt >= QUOTA_RETRY_ATTEMPTS:

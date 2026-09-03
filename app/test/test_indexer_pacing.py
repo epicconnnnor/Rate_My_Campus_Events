@@ -9,6 +9,7 @@ import pytest
 from app.rag import indexer
 from app.rag.indexer import FREE_TIER_DOCUMENTS_PER_MINUTE, _Pacer
 from app.rag.providers import (SERVER_BACKOFF_CAP_SECONDS,
+                               _is_daily_quota, _quota_ids,
                                SERVER_RETRY_ATTEMPTS, _is_quota_error,
                                _is_server_error, _quota_delay,
                                _retry_after, _server_delay)
@@ -203,3 +204,69 @@ def test_the_two_policies_do_not_share_a_delay_calculation():
 
     quota = FakeError(REAL_429, code=429)
     assert _quota_delay(quota, 1) == pytest.approx(15.044580725)
+
+
+# =============================================================================
+# PER-DAY QUOTAS ARE NOT WORTH WAITING FOR
+# =============================================================================
+
+# Both taken verbatim from real CI failures.
+DAILY_429 = (
+    "429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded "
+    "your current quota. * Quota exceeded for metric: "
+    "generativelanguage.googleapis.com/generate_content_free_tier_requests, "
+    "limit: 20, model: gemini-3.6-flash. Please retry in 58.993147613s.', "
+    "'status': 'RESOURCE_EXHAUSTED', 'details': [{'@type': "
+    "'type.googleapis.com/google.rpc.QuotaFailure', 'violations': [{'quotaId': "
+    "'GenerateRequestsPerDayPerProjectPerModel-FreeTier'}]}, {'@type': "
+    "'type.googleapis.com/google.rpc.RetryInfo', 'retryDelay': '58s'}]}}"
+)
+
+PER_MINUTE_429 = (
+    "429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'details': [{'@type': "
+    "'type.googleapis.com/google.rpc.QuotaFailure', 'violations': [{'quotaId': "
+    "'EmbedContentRequestsPerMinutePerUserPerProjectPerModel-FreeTier'}]}, "
+    "{'@type': 'type.googleapis.com/google.rpc.RetryInfo', 'retryDelay': "
+    "'14.044580725s'}]}}"
+)
+
+
+def test_the_daily_quota_id_is_read_from_the_message():
+    assert _quota_ids(FakeError(DAILY_429, code=429)) == [
+        "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+    ]
+
+
+def test_the_daily_quota_id_is_read_from_structured_details():
+    error = FakeError("429", details=[{
+        "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+        "violations": [{"quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier"}],
+    }])
+    assert _is_daily_quota(error)
+
+
+def test_a_per_day_refusal_is_fatal():
+    assert _is_daily_quota(FakeError(DAILY_429, code=429))
+
+
+def test_a_per_minute_refusal_is_not():
+    """This one is worth sitting out -- it is the embedding quota that pacing
+    already handles, and it really does come back within the minute."""
+    assert not _is_daily_quota(FakeError(PER_MINUTE_429, code=429))
+
+
+def test_a_daily_refusal_still_looks_like_a_quota_error():
+    """It is still a 429; it just is not one worth waiting on."""
+    assert _is_quota_error(FakeError(DAILY_429, code=429))
+
+
+def test_the_misleading_retry_delay_is_ignored_for_daily_quotas():
+    """The refusal advises 58 seconds for an allowance that returns tomorrow.
+    We can still read it -- we simply must not act on it."""
+    error = FakeError(DAILY_429, code=429)
+    assert _retry_after(error) == pytest.approx(58.0)
+    assert _is_daily_quota(error)
+
+
+def test_an_unknown_quota_id_is_not_assumed_daily():
+    assert not _is_daily_quota(FakeError("429 RESOURCE_EXHAUSTED, no detail", code=429))
