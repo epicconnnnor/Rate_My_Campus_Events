@@ -9,6 +9,7 @@ October events that have nothing to do with it.
 """
 
 import logging
+import time
 from collections import Counter
 from datetime import datetime, timezone
 from typing import Iterable, List, Optional
@@ -28,6 +29,15 @@ MAX_DESCRIPTION_CHARS = 4000
 
 # How many documents to send per embedding call.
 BATCH_SIZE = 32
+
+# Google's free tier allows 100 embed_content requests per minute, and it
+# counts documents rather than HTTP calls -- one batch of 32 spends 32 of them.
+# This is that published quota, not a number picked for feel. Exceeding it is a
+# hard 429: the first eval run died on document 101 of 102.
+FREE_TIER_DOCUMENTS_PER_MINUTE = 100
+
+# Slack so a slow clock or a shared project cannot land us exactly on the line.
+PACING_HEADROOM_SECONDS = 2
 
 
 # =============================================================================
@@ -68,6 +78,41 @@ def _needs_embedding(event: Event, existing: Optional[EventEmbedding],
     if existing.source_updated_at != event.external_updated_at:
         return True
     return existing.content != content
+
+
+class _Pacer:
+    """Keeps embedded documents under the per-minute ceiling.
+
+    The SDK has its own retry, and it exhausted itself against this quota
+    rather than riding it out, so waiting has to happen before the request
+    rather than after the refusal. This runs once per backfill, so simply
+    sleeping out the rest of the minute is fine and beats anything cleverer.
+    """
+
+    def __init__(self, limit: int = FREE_TIER_DOCUMENTS_PER_MINUTE) -> None:
+        self.limit = limit
+        self._window_started = time.monotonic()
+        self._spent = 0
+
+    def reserve(self, documents: int) -> None:
+        """Block until `documents` more can be sent without breaking the quota."""
+        elapsed = time.monotonic() - self._window_started
+        if elapsed >= 60:
+            self._window_started = time.monotonic()
+            self._spent = 0
+            elapsed = 0
+
+        if self._spent + documents > self.limit:
+            wait = max(0.0, 60 - elapsed) + PACING_HEADROOM_SECONDS
+            log.info(
+                "%d/%d documents used this minute; waiting %.0fs for the quota "
+                "window to roll", self._spent, self.limit, wait,
+            )
+            time.sleep(wait)
+            self._window_started = time.monotonic()
+            self._spent = 0
+
+        self._spent += documents
 
 
 def _store(session: Session, event: Event, content: str,
@@ -132,10 +177,12 @@ def index_events(event_ids: Optional[Iterable[int]] = None,
             statement = statement.where(Event.event_id.in_(list(event_ids)))
 
         pending = []
+        pacer = _Pacer()
 
         def flush():
             if not pending:
                 return
+            pacer.reserve(len(pending))
             vectors = provider.embed_documents([item[1] for item in pending])
             for (event, content), vector in zip(pending, vectors):
                 _store(session, event, content, vector)

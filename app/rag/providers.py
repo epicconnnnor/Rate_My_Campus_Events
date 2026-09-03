@@ -11,8 +11,13 @@ writing another pair of classes here and pointing RAG_PROVIDER at them.
 """
 
 import hashlib
+import logging
 import math
-from typing import List, Protocol
+import re
+import time
+from typing import Callable, List, Optional, Protocol
+
+log = logging.getLogger("providers")
 
 from app.core.config import (
     CHAT_MODEL,
@@ -37,6 +42,71 @@ class EmbeddingProvider(Protocol):
 class ChatProvider(Protocol):
     def complete(self, prompt: str) -> str:
         """One prompt in, one answer out. No history, no tools."""
+
+
+# =============================================================================
+# QUOTA BACKSTOP
+# =============================================================================
+
+# Pacing in the indexer is what keeps us inside the quota. This is only for the
+# cases pacing cannot see -- another job on the same project, a per-model limit
+# we are not tracking -- so the numbers are small on purpose. The SDK's own
+# retry gives up against a sustained quota refusal, hence our own.
+QUOTA_RETRY_ATTEMPTS = 4
+QUOTA_FALLBACK_DELAY_SECONDS = 20
+
+# e.g. "retryDelay": "14.044580725s"
+_RETRY_DELAY = re.compile(r"retry[_-]?delay['\"]?\s*[:=]\s*['\"]?([0-9.]+)s",
+                          re.IGNORECASE)
+
+
+def _is_quota_error(error) -> bool:
+    if getattr(error, "code", None) == 429:
+        return True
+    return "RESOURCE_EXHAUSTED" in str(error)
+
+
+def _retry_after(error) -> Optional[float]:
+    """However long the server asked us to wait, if it said.
+
+    A quota refusal carries RetryInfo. Guessing when we have been told is
+    pointless, and guessing short gets us refused again.
+    """
+    details = getattr(error, "details", None)
+    if isinstance(details, dict):
+        details = details.get("error", {}).get("details")
+    if isinstance(details, list):
+        for entry in details:
+            if not isinstance(entry, dict):
+                continue
+            if entry.get("@type", "").endswith("RetryInfo"):
+                match = _RETRY_DELAY.search(f"retryDelay: {entry.get('retryDelay')}")
+                if match:
+                    return float(match.group(1))
+
+    match = _RETRY_DELAY.search(str(error))
+    return float(match.group(1)) if match else None
+
+
+def _with_quota_retry(call: Callable):
+    """Run `call`, riding out a 429 rather than failing the whole backfill."""
+    from google.genai import errors
+
+    for attempt in range(1, QUOTA_RETRY_ATTEMPTS + 1):
+        try:
+            return call()
+        except errors.APIError as error:
+            if not _is_quota_error(error) or attempt == QUOTA_RETRY_ATTEMPTS:
+                raise
+            delay = _retry_after(error)
+            if delay is None:
+                delay = QUOTA_FALLBACK_DELAY_SECONDS * attempt
+            delay += 1  # a second of slack rather than racing the window
+            log.warning(
+                "quota refused the request; waiting %.1fs then retrying "
+                "(attempt %d of %d)", delay, attempt, QUOTA_RETRY_ATTEMPTS,
+            )
+            time.sleep(delay)
 
 
 # =============================================================================
@@ -73,14 +143,14 @@ class GeminiEmbeddingProvider:
     def _embed(self, texts: List[str], task_type: str) -> List[List[float]]:
         from google.genai import types
 
-        response = self._client.models.embed_content(
+        response = _with_quota_retry(lambda: self._client.models.embed_content(
             model=self._model,
             contents=texts,
             config=types.EmbedContentConfig(
                 task_type=task_type,
                 output_dimensionality=EMBEDDING_DIMENSIONS,
             ),
-        )
+        ))
         return [_normalize(item.values) for item in response.embeddings]
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
@@ -102,10 +172,10 @@ class GeminiChatProvider:
         self._model = CHAT_MODEL
 
     def complete(self, prompt: str) -> str:
-        response = self._client.models.generate_content(
+        response = _with_quota_retry(lambda: self._client.models.generate_content(
             model=self._model,
             contents=prompt,
-        )
+        ))
         return response.text
 
 
