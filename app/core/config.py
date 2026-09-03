@@ -76,7 +76,10 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "gemini-embedding-001")
 
-CHAT_MODEL = os.getenv("CHAT_MODEL", "gemini-2.5-flash")
+# gemini-2.5-flash is closed to new API keys -- it answers a fresh key with
+# 404 NOT_FOUND rather than a deprecation notice, so it reads as a broken
+# model id instead of a retired one.
+CHAT_MODEL = os.getenv("CHAT_MODEL", "gemini-3.6-flash")
 
 # Baked into the vector column type by migration 0004. Changing it is a schema
 # change plus a full re-index, not a config tweak -- keep the two in step.
