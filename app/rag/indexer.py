@@ -182,8 +182,12 @@ def index_events(event_ids: Optional[Iterable[int]] = None,
         def flush():
             if not pending:
                 return
-            pacer.reserve(len(pending))
-            vectors = provider.embed_documents([item[1] for item in pending])
+            texts = [item[1] for item in pending]
+            # Not len(texts): a cached document is not a request, and pacing
+            # for it means sleeping out a quota window for work that is not
+            # going to happen.
+            pacer.reserve(provider.chargeable(texts))
+            vectors = provider.embed_documents(texts)
             for (event, content), vector in zip(pending, vectors):
                 _store(session, event, content, vector)
             session.commit()

@@ -104,6 +104,16 @@ JUDGE_MODEL = os.getenv("JUDGE_MODEL") or CHAT_MODEL
 # that a truncated prefix stays useful (Matryoshka).
 EMBEDDING_DIMENSIONS = int(os.getenv("EMBEDDING_DIMENSIONS", "1536"))
 
+# Where to keep embedding vectors between runs, if anywhere. Empty means no
+# cache, which is how the app runs: it embeds a question once and never sees it
+# again, so there is nothing to reuse.
+#
+# The eval is the opposite. It re-embeds the same 102 frozen events on every
+# run, which was spending a tenth of the day's free embedding requests to
+# recompute vectors that had not changed. It sets this; see
+# app/rag/embedding_cache.py.
+EMBEDDING_CACHE_PATH = os.getenv("EMBEDDING_CACHE_PATH", "").strip()
+
 # Retrieval tuning. MAX_DISTANCE is a cosine distance, so 0 is identical and 2
 # is opposite; anything above the cutoff is treated as not really an answer.
 # It wants tuning against real embeddings once there is a key to generate them.

@@ -2,6 +2,10 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+# Cached embedding vectors. Content-addressed and regenerated on demand, so
+# losing them costs one slow run and nothing else.
+app/test/fixtures/.embeddings/
+
 # Every local env file, except the committed template.
 .env
 .env.*

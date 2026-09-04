@@ -34,6 +34,27 @@ python -m json.tool app/test/fixtures/events.json | less
 Refreezing it invalidates every question written against it, so don't, unless
 you mean to rewrite them too.
 
+### `.embeddings/`
+
+Their vectors, kept between runs. Gitignored.
+
+The events are frozen, so their vectors are too, and re-computing all 102 of
+them every run was spending a tenth of the day's free embedding requests on
+work that had already been done. Point `EMBEDDING_CACHE_PATH` at a directory
+and the eval reuses them instead:
+
+```
+EMBEDDING_CACHE_PATH=app/test/fixtures/.embeddings \
+GEMINI_API_KEY=... DATABASE_NAME=rmce_eval pytest app/test/test_hallucinations.py
+```
+
+CI sets it, and carries the directory from one run to the next.
+
+Entries are named after a hash of the text, the model and the width, so there
+is nothing to invalidate by hand: editing an event, adding a golden question or
+changing `EMBEDDING_MODEL` simply misses and embeds that one thing. Deleting the
+directory costs one slow run and nothing else.
+
 ## `golden_questions.json`
 
 The questions the eval judges answers against. **These are written by hand
