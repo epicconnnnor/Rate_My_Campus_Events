@@ -15,12 +15,15 @@ import logging
 import math
 import re
 import time
-from typing import Callable, List, Optional, Protocol
+from typing import Callable, Dict, List, Optional, Protocol
 
 log = logging.getLogger("providers")
 
+from app.rag.pacing import Pacer
+
 from app.core.config import (
     CHAT_MODEL,
+    CHAT_REQUESTS_PER_MINUTE,
     JUDGE_MODEL,
     EMBEDDING_CACHE_PATH,
     EMBEDDING_DIMENSIONS,
@@ -262,6 +265,25 @@ def _with_retries(call: Callable):
 
 
 # =============================================================================
+# PACING
+# =============================================================================
+
+# One pacer per model id, held here rather than on the provider.
+#
+# Quotas are per project per model, so chat and judge each need their own count
+# -- and answer_question builds a fresh provider for every question, so a pacer
+# kept on the instance would start a new minute each time and pace nothing.
+_CHAT_PACERS: Dict[str, Pacer] = {}
+
+
+def chat_pacer(model: str) -> Pacer:
+    """The per-minute allowance for one model, shared by everything using it."""
+    if model not in _CHAT_PACERS:
+        _CHAT_PACERS[model] = Pacer(CHAT_REQUESTS_PER_MINUTE, "requests")
+    return _CHAT_PACERS[model]
+
+
+# =============================================================================
 # GEMINI
 # =============================================================================
 
@@ -327,6 +349,11 @@ class GeminiChatProvider:
         self._model = model or CHAT_MODEL
 
     def complete(self, prompt: str) -> str:
+        # Before the call, not after the refusal: a per-minute 429 is entirely
+        # avoidable by arriving slower, and the retry budget is better kept for
+        # the failures that are not our doing.
+        chat_pacer(self._model).reserve(1)
+
         response = _with_retries(lambda: self._client.models.generate_content(
             model=self._model,
             contents=prompt,
