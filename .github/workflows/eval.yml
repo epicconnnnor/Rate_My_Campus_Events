@@ -26,6 +26,7 @@ jobs:
 
   hallucinations:
     runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
 
     # The default is 360 minutes, which is not a limit so much as an afternoon.
     # This job waits on purpose -- a quota window is a minute, and a busy model
