@@ -14,7 +14,16 @@ bcrypt<4.0.0
 requests
 
 # Database - SQLModel (includes SQLAlchemy and Pydantic)
-sqlmodel==0.0.14
+#
+# 0.0.42 rather than 0.0.14 so the app imports on Python 3.14. 3.14 stopped
+# evaluating annotations eagerly, and the old SQLModel read them the old way,
+# so every table model came up with no fields at all and the import died on
+# "Field 'user_id' requires a type annotation" -- pointing at a line that is
+# correctly annotated, which is what made it worth writing down.
+#
+# Not a pydantic problem: 3.13 and 3.14 both resolve pydantic 2.13.5, and only
+# 3.14 broke. CI is on 3.13, where both versions of SQLModel pass the suite.
+sqlmodel==0.0.42
 psycopg2-binary
 alembic==1.16.5
 pgvector==0.4.1
