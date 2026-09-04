@@ -66,7 +66,7 @@ def test_a_cached_batch_costs_nothing(clock):
     """The indexer reserves what will actually be sent, not what it was asked
     for. A run answered entirely from the embedding cache used to reach 102
     documents and sit out a quota window for requests nobody was making."""
-    pacer = _Pacer()
+    pacer = _document_pacer()
     for _ in range(10):
         pacer.reserve(0)
     assert clock.slept == []
