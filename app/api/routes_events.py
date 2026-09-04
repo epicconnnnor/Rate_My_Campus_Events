@@ -5,11 +5,16 @@ This module defines all event-related routes for RateMyCampusEvents.
 from datetime import datetime
 from typing import Optional
 
+import logging
+
 from app.core.security import get_user_from_session
 from app.db import database as db
+from app.db.database import engine
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+
+log = logging.getLogger("events")
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
@@ -31,17 +36,92 @@ async def get_current_user(
 
 
 # =============================================================================
-# HOME PAGE
+# LANDING PAGE
 # =============================================================================
 
 
+def when_to_show(event: dict) -> Optional[str]:
+    """When an event says it is on, in campus time.
+
+    Two fields, for two kinds of event. Anything imported from the calendar
+    has a real timestamp in starts_at; date_time is the free-text field a
+    person types when they create one by hand, and it is NULL on every
+    imported row -- which is why these pages had been printing the word "None"
+    once per event.
+    """
+    from app.rag.retriever import CAMPUS_TZ
+
+    starts_at = event.get("starts_at")
+    if starts_at:
+        local = starts_at.astimezone(CAMPUS_TZ)
+        # Built by hand rather than with %-I, which is a glibc extension.
+        return f"{local:%a %b %d}, {local.hour % 12 or 12}:{local:%M %p}"
+    return event.get("date_time") or None
+
+
+def _landing_stats() -> dict:
+    """Real numbers for the front page, read from the calendar we actually
+    hold.
+
+    Written down nowhere: a landing page quoting a number that was true once is
+    worse than a landing page quoting none. If the database is not up, the
+    counts come back None and the template leaves those blocks out rather than
+    showing a confident zero.
+    """
+    from sqlalchemy import text
+
+    try:
+        with engine.connect() as connection:
+            events = connection.execute(
+                text("SELECT count(*) FROM events")
+            ).scalar_one()
+            categories = connection.execute(text(
+                "SELECT count(DISTINCT category) "
+                "FROM events, unnest(event_types) AS category"
+            )).scalar_one()
+        return {"events": events, "categories": categories}
+    except Exception:
+        log.exception("landing: could not read the counts")
+        return {"events": None, "categories": None}
+
+
 @router.get("/", response_class=HTMLResponse)
-async def home(
+async def landing(
+    request: Request,
+    current_user: Optional[dict] = Depends(get_current_user),
+    token: Optional[str] = Query(None),
+):
+    """The first screen, and the only one that has to work signed out.
+
+    Nothing here needs a session. current_user only decides whether the
+    call to action says "Get started" or "Open the chat".
+    """
+    return templates.TemplateResponse(
+        "landing.html",
+        {
+            "request": request,
+            "user": current_user,
+            "token": token,
+            "stats": _landing_stats(),
+        },
+    )
+
+
+# =============================================================================
+# EVENT LIST
+# =============================================================================
+
+
+@router.get("/events", response_class=HTMLResponse)
+async def events_index(
     request: Request,
     current_user: Optional[dict] = Depends(get_current_user),
     token: Optional[str] = Query(None),
 ):
     all_events = db.list_events()
+
+    for event in all_events:
+        event["when"] = when_to_show(event)
 
     # Calculate ratings
     for event in all_events:
@@ -119,7 +199,7 @@ async def create_event(
 
     if token:
         return RedirectResponse(f"/?token={token}", status_code=303)
-    return RedirectResponse("/", status_code=303)
+    return RedirectResponse("/events", status_code=303)
 
 
 # =============================================================================
@@ -137,6 +217,8 @@ async def event_detail(
     event = db.get_event(event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
+
+    event["when"] = when_to_show(event)
 
     creator = db.get_user_by_id(event["created_by"])
 

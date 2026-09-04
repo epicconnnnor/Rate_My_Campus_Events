@@ -11,7 +11,7 @@
     <div class="header">
         <div class="nav">
             <div class="logo">📅 RateMyCampusEvents</div>
-            <a href="/{% if token %}?token={{ token }}{% endif %}" style="color: white; text-decoration: none;">
+            <a href="/events{% if token %}?token={{ token }}{% endif %}" style="color: white; text-decoration: none;">
                 ← Back to Events
             </a>
         </div>
@@ -20,7 +20,7 @@
     <div class="container">
         <div class="event-header">
             <div class="event-title">{{ event.title }}</div>
-            <div class="event-meta">📆 {{ event.date_time }}</div>
+            <div class="event-meta">📆 {{ event.when or 'Date to be announced' }}</div>
             <div class="event-meta">📍 {{ event.location }}</div>
             <div class="event-meta">👤 Organized by {{ creator.name if creator else 'Unknown' }}</div>
             <div class="event-description">{{ event.description }}</div>

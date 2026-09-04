@@ -10,7 +10,7 @@
     <div class="header">
         <div class="nav">
             <div class="logo">📅 RateMyCampusEvents</div>
-            <a href="/{% if token %}?token={{ token }}{% endif %}" style="color: white; text-decoration: none;">
+            <a href="/events{% if token %}?token={{ token }}{% endif %}" style="color: white; text-decoration: none;">
                 ← Back
             </a>
         </div>
@@ -41,7 +41,7 @@
                 </div>
 
                 <button class="btn btn-success">Create Event</button>
-                <a href="/{% if token %}?token={{ token }}{% endif %}" class="btn-secondary"
+                <a href="/events{% if token %}?token={{ token }}{% endif %}" class="btn-secondary"
                     style="display: inline-block; text-decoration: none; color: white; padding: 12px 24px; border-radius: 4px;">
                     Cancel
                 </a>

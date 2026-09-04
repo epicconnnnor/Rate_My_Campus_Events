@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>RateMyCampusEvents - ask about what's on at UMass</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+{#
+    The only page that has to work signed out. Nothing below reads a session
+    except the call to action, which changes its wording and its destination.
+    Icons are inline SVG rather than a font or a library: four of them do not
+    justify a request, and they inherit currentColor for free.
+#}
+
+<body class="landing">
+    <header class="landing-nav">
+        <a class="landing-brand" href="/">
+            <span class="landing-mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" />
+                    <path d="M16 2v4M8 2v4M3 10h18" />
+                </svg>
+            </span>
+            <span>RateMyCampusEvents</span>
+        </a>
+
+        <nav class="landing-nav-actions">
+            <a class="button button-ghost" href="/events{% if token %}?token={{ token }}{% endif %}">Browse events</a>
+            {% if user %}
+            <a class="button button-primary" href="/chat{% if token %}?token={{ token }}{% endif %}">Open the chat</a>
+            {% else %}
+            <a class="button button-ghost" href="/login">Log in</a>
+            <a class="button button-primary" href="/register">Get started</a>
+            {% endif %}
+        </nav>
+    </header>
+
+    <main>
+        <section class="landing-hero">
+            <span class="landing-pill">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 2l2.4 7.4H22l-6 4.4 2.3 7.2-6.3-4.6-6.3 4.6L7.9 13.8 2 9.4h7.6z" />
+                </svg>
+                Grounded in the official UMass calendar
+            </span>
+
+            <h1 class="landing-headline">
+                Ask what&rsquo;s on campus.<br>
+                Get answers <span class="landing-accent">from the real calendar</span>.
+            </h1>
+
+            <p class="landing-subhead">
+                A retrieval-augmented assistant over the UMass Amherst events feed. It
+                searches the calendar first and only writes from what it found, so every
+                event, date and location it gives you is one that actually exists.
+            </p>
+
+            <div class="landing-cta">
+                {% if user %}
+                <a class="button button-primary button-lg"
+                    href="/chat{% if token %}?token={{ token }}{% endif %}">Open the chat</a>
+                {% else %}
+                <a class="button button-primary button-lg" href="/register">Get started</a>
+                {% endif %}
+                <a class="button button-outline button-lg"
+                    href="/events{% if token %}?token={{ token }}{% endif %}">Browse events</a>
+            </div>
+
+            {#
+                Read from the database on every request. A landing page quoting a
+                number that was true once is worse than one quoting none, so an
+                unreadable count leaves the block out rather than showing a zero.
+            #}
+            <div class="landing-stats">
+                {% if stats.events %}
+                <div class="landing-stat">
+                    <div class="landing-stat-value">{{ stats.events }}</div>
+                    <div class="landing-stat-label">events indexed</div>
+                </div>
+                {% endif %}
+                {% if stats.categories %}
+                <div class="landing-stat">
+                    <div class="landing-stat-value">{{ stats.categories }}</div>
+                    <div class="landing-stat-label">event categories</div>
+                </div>
+                {% endif %}
+                <div class="landing-stat">
+                    <div class="landing-stat-value">100%</div>
+                    <div class="landing-stat-label">answers grounded in the official calendar</div>
+                </div>
+            </div>
+        </section>
+
+        {# Not a screenshot: the same classes the real reply fragment renders. #}
+        <section class="landing-demo" aria-label="Example conversation">
+            <div class="card landing-demo-card">
+                <div class="landing-demo-bar">
+                    <span class="landing-dot"></span>
+                    <span class="landing-dot"></span>
+                    <span class="landing-dot"></span>
+                    <span class="landing-demo-title">Ask about events</span>
+                </div>
+
+                <div class="landing-demo-body chat-page">
+                    <div class="chat-exchange">
+                        <div class="chat-question">what&rsquo;s on this weekend that isn&rsquo;t a lecture?</div>
+
+                        <div class="card">
+                            {#- .chat-answer is pre-wrap, because a real answer's line
+                                breaks are the model's. That makes this template's own
+                                indentation visible, so the text stays on one line. -#}
+                            <div class="chat-answer">There&rsquo;s a decent spread. The Welcome To The U: Kickoff Carnival runs Friday afternoon, and Libapalooza! is on at the Du Bois Library the same day &mdash; neither is a lecture.</div>
+
+                            <div class="chat-events">
+                                <span class="card chat-event">
+                                    <span class="chat-event-title">Welcome To The U: Kickoff Carnival</span>
+                                    <span class="chat-event-meta">
+                                        <span>Fri Sep 04, 3:00 PM</span>
+                                        <span>Southwest Horseshoe</span>
+                                    </span>
+                                    <span class="chat-event-badges">
+                                        <span class="badge badge-secondary">Free</span>
+                                    </span>
+                                </span>
+                                <span class="card chat-event">
+                                    <span class="chat-event-title">Libapalooza!</span>
+                                    <span class="chat-event-meta">
+                                        <span>Fri Sep 04, 10:00 AM</span>
+                                        <span>W. E. B. Du Bois Library</span>
+                                    </span>
+                                    <span class="chat-event-badges">
+                                        <span class="badge badge-secondary">Free</span>
+                                    </span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="landing-features">
+            <h2 class="landing-section-title">How it stays honest</h2>
+
+            <div class="landing-feature-grid">
+                <div class="card landing-feature">
+                    <span class="landing-feature-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="7" />
+                            <path d="M21 21l-4.3-4.3" />
+                        </svg>
+                    </span>
+                    <h3 class="landing-feature-title">Retrieval first, writing second</h3>
+                    <p class="landing-feature-text">
+                        The question is turned into filters &mdash; dates, free or paid, in
+                        person or virtual &mdash; and SQL narrows the calendar before any
+                        vector search runs. The model only ever sees events that survived.
+                    </p>
+                </div>
+
+                <div class="card landing-feature">
+                    <span class="landing-feature-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 3l8 4v5c0 4.4-3.4 8.2-8 9-4.6-.8-8-4.6-8-9V7z" />
+                            <path d="M9 12l2 2 4-4" />
+                        </svg>
+                    </span>
+                    <h3 class="landing-feature-title">Nothing invented</h3>
+                    <p class="landing-feature-text">
+                        When nothing matches, it says so and offers the nearest real events
+                        instead of inventing a plausible one. A second model reads every
+                        answer against what retrieval found and checks each claim.
+                    </p>
+                </div>
+
+                <div class="card landing-feature">
+                    <span class="landing-feature-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="4" width="18" height="18" rx="2" />
+                            <path d="M16 2v4M8 2v4M3 10h18" />
+                        </svg>
+                    </span>
+                    <h3 class="landing-feature-title">The calendar, not the internet</h3>
+                    <p class="landing-feature-text">
+                        Events come from the UMass Amherst feed and are re-indexed when they
+                        change. Ratings and comments are yours, on top of the same events
+                        everyone else is looking at.
+                    </p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="landing-footer">
+        <span>RateMyCampusEvents &mdash; a student project over the UMass Amherst events calendar.</span>
+        <span class="landing-footer-links">
+            <a href="/events{% if token %}?token={{ token }}{% endif %}">Events</a>
+            <a href="/chat{% if token %}?token={{ token }}{% endif %}">Chat</a>
+            {% if not user %}<a href="/login">Log in</a>{% endif %}
+        </span>
+    </footer>
+</body>
+
+</html>
