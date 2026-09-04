@@ -117,6 +117,16 @@ EMBEDDING_DIMENSIONS = int(os.getenv("EMBEDDING_DIMENSIONS", "1536"))
 RETRIEVAL_TOP_K = int(os.getenv("RETRIEVAL_TOP_K", "8"))
 RETRIEVAL_MAX_DISTANCE = float(os.getenv("RETRIEVAL_MAX_DISTANCE", "0.6"))
 
+# Requests per minute for a generation call, counted per model. The Flash-Lite
+# models allow 15. The non-lite ones allow 5, so this belongs with CHAT_MODEL:
+# moving off Lite means moving this too.
+#
+# Per model matters. Chat and judge are different models and so different
+# buckets, and one eval question costs two chat calls -- one to read the
+# question, one to write the answer -- which arrive as fast as the network
+# allows.
+CHAT_REQUESTS_PER_MINUTE = int(os.getenv("CHAT_REQUESTS_PER_MINUTE") or "15")
+
 # How many chat questions one user may ask per calendar day, campus time.
 CHAT_DAILY_LIMIT = int(os.getenv("CHAT_DAILY_LIMIT", "20"))
 

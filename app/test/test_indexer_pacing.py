@@ -1,18 +1,24 @@
 """
-Tests for staying inside the embedding quota.
+Tests for staying inside the per-minute quotas.
+
+One Pacer serves both the embedding backfill and the chat calls, against
+different limits, so the pacing tests cover the shared class and the two
+callers' numbers separately.
 
 Nothing here sleeps for real: the clock is a fake so a minute costs nothing.
 """
 
 import pytest
 
-from app.rag import indexer
-from app.rag.indexer import FREE_TIER_DOCUMENTS_PER_MINUTE, _Pacer
+from app.core.config import CHAT_REQUESTS_PER_MINUTE
+from app.rag import pacing
+from app.rag.indexer import FREE_TIER_DOCUMENTS_PER_MINUTE, _document_pacer
+from app.rag.pacing import Pacer
 from app.rag.providers import (SERVER_BACKOFF_CAP_SECONDS,
                                _is_daily_quota, _quota_ids,
                                SERVER_RETRY_ATTEMPTS, _is_quota_error,
                                _is_server_error, _quota_delay,
-                               _retry_after, _server_delay)
+                               _retry_after, _server_delay, chat_pacer)
 
 
 class FakeClock:
@@ -33,7 +39,7 @@ class FakeClock:
 @pytest.fixture
 def clock(monkeypatch):
     fake = FakeClock()
-    monkeypatch.setattr(indexer, "time", fake)
+    monkeypatch.setattr(pacing, "time", fake)
     return fake
 
 
@@ -42,12 +48,15 @@ def clock(monkeypatch):
 # =============================================================================
 
 
-def test_the_limit_is_googles_number_not_ours():
+def test_the_limits_are_googles_numbers_not_ours():
     assert FREE_TIER_DOCUMENTS_PER_MINUTE == 100
+    # The Flash-Lite models. The non-lite ones are 5, which is why this moves
+    # with CHAT_MODEL rather than standing on its own.
+    assert CHAT_REQUESTS_PER_MINUTE == 15
 
 
 def test_staying_under_the_limit_never_waits(clock):
-    pacer = _Pacer()
+    pacer = _document_pacer()
     for _ in range(3):
         pacer.reserve(32)
     assert clock.slept == []
@@ -56,7 +65,7 @@ def test_staying_under_the_limit_never_waits(clock):
 def test_crossing_the_limit_waits_out_the_minute(clock):
     """96 documents through, then a batch that would make 102 -- which is
     exactly what killed the first eval run."""
-    pacer = _Pacer()
+    pacer = _document_pacer()
     for _ in range(3):
         pacer.reserve(32)
     pacer.reserve(6)
@@ -67,7 +76,7 @@ def test_crossing_the_limit_waits_out_the_minute(clock):
 
 
 def test_the_window_resets_after_the_wait(clock):
-    pacer = _Pacer()
+    pacer = _document_pacer()
     for _ in range(3):
         pacer.reserve(32)
     pacer.reserve(6)
@@ -81,7 +90,7 @@ def test_the_window_resets_after_the_wait(clock):
 
 
 def test_a_minute_passing_on_its_own_resets_the_window(clock):
-    pacer = _Pacer()
+    pacer = _document_pacer()
     for _ in range(3):
         pacer.reserve(32)
 
@@ -91,10 +100,51 @@ def test_a_minute_passing_on_its_own_resets_the_window(clock):
 
 
 def test_only_the_overflowing_batch_waits(clock):
-    pacer = _Pacer()
+    pacer = _document_pacer()
     for _ in range(6):
         pacer.reserve(32)
     # 192 documents is two windows' worth, so exactly one wait.
+    assert len(clock.slept) == 1
+
+
+# =============================================================================
+# CHAT CALLS ARE PACED PER MODEL
+# =============================================================================
+
+
+def test_a_model_keeps_one_pacer_across_providers():
+    """The point of holding these in the module rather than on the provider.
+
+    answer_question builds a fresh chat provider for every question, so a pacer
+    living on the instance would start a new minute each time and pace nothing.
+    """
+    assert chat_pacer("some-model") is chat_pacer("some-model")
+
+
+def test_chat_and_judge_do_not_share_a_count():
+    """Quotas are per project per model. Counting them together would pace two
+    separate allowances as though they were one."""
+    assert chat_pacer("chat-model") is not chat_pacer("judge-model")
+
+
+def test_chat_stays_under_fifteen_a_minute(clock):
+    pacer = Pacer(CHAT_REQUESTS_PER_MINUTE, "requests")
+    for _ in range(CHAT_REQUESTS_PER_MINUTE):
+        pacer.reserve(1)
+    assert clock.slept == []
+
+    # The sixteenth in the same minute is the one that would be refused.
+    pacer.reserve(1)
+    assert len(clock.slept) == 1
+    assert clock.slept[0] >= 60
+
+
+def test_an_eval_run_of_two_calls_a_question_waits_once(clock):
+    """Nine golden questions, two chat calls each -- reading the question and
+    writing the answer -- is 18 in a burst against a limit of 15."""
+    pacer = Pacer(CHAT_REQUESTS_PER_MINUTE, "requests")
+    for _ in range(18):
+        pacer.reserve(1)
     assert len(clock.slept) == 1
 
 
