@@ -533,3 +533,18 @@ def test_an_explicit_today_still_wins_over_demo_date(monkeypatch):
     result, _ = run(search)
 
     assert result.filters.start == midnight(date(2026, 9, 11))
+
+
+def test_the_distance_cutoff_belongs_to_the_embedding_model():
+    """0.70 was measured against text-embedding-3-small, not chosen for feel.
+
+    Pinned so that changing EMBEDDING_MODEL without re-measuring shows up here
+    rather than as every question quietly falling through to the near-miss
+    branch. Under the previous model the right answer was 0.6; the same number
+    under this one threw away a Libraries event asked for by the word
+    "library".
+    """
+    from app.core.config import EMBEDDING_MODEL, RETRIEVAL_MAX_DISTANCE
+
+    assert RETRIEVAL_MAX_DISTANCE == 0.70
+    assert EMBEDDING_MODEL == "text-embedding-3-small"

@@ -155,9 +155,18 @@ EMBEDDING_CACHE_PATH = os.getenv("EMBEDDING_CACHE_PATH", "").strip()
 
 # Retrieval tuning. MAX_DISTANCE is a cosine distance, so 0 is identical and 2
 # is opposite; anything above the cutoff is treated as not really an answer.
-# It wants tuning against real embeddings once there is a key to generate them.
+#
+# 0.70 is measured rather than guessed, against text-embedding-3-small and the
+# 102 frozen events. It was 0.6, which was measured against Gemini's vectors --
+# a different model puts related things at a different distance, and 0.6 under
+# this one rejected "Libraries Outreach Series" for the query "library".
+#
+# The number belongs to the embedding model, not to the app. Changing
+# EMBEDDING_MODEL means measuring this again: too low and every question falls
+# through to the near-miss branch, too high and unrelated events are offered as
+# answers.
 RETRIEVAL_TOP_K = int(os.getenv("RETRIEVAL_TOP_K", "8"))
-RETRIEVAL_MAX_DISTANCE = float(os.getenv("RETRIEVAL_MAX_DISTANCE", "0.6"))
+RETRIEVAL_MAX_DISTANCE = float(os.getenv("RETRIEVAL_MAX_DISTANCE", "0.70"))
 
 # Requests per minute, per provider. Both numbers are deliberately under the
 # published ceiling rather than on it: pacing to exactly the limit means
