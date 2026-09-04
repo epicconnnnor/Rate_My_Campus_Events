@@ -37,7 +37,7 @@
             <div class="event-card">
                 <div class="event-title">{{ event.title }}</div>
                 <div class="event-meta">
-                    📍 {{ event.location }} • 📆 {{ event.date_time }}
+                    📍 {{ event.location }} • 📆 {{ event.when or 'Date to be announced' }}
                 </div>
                 <div class="event-description">
                     {{ event.description[:150] }}{% if event.description|length > 150 %}...{% endif %}

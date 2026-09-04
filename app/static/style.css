@@ -27,7 +27,11 @@
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 3.9%;
 
-    --primary: 0 0% 9%;
+    /* UMass maroon. #881c1c, and #6d1616 for the pressed/hover state.
+       Stored as HSL channels like everything else here, so a tint is
+       hsl(var(--primary) / 0.08) rather than a second hex to keep in step. */
+    --primary: 0 66% 32%;
+    --primary-hover: 0 66% 26%;
     --primary-foreground: 0 0% 98%;
 
     --secondary: 0 0% 96.1%;
@@ -44,7 +48,7 @@
 
     --border: 0 0% 89.8%;
     --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
+    --ring: 0 66% 32%;
 
     --radius: 0.5rem;
 
@@ -66,8 +70,9 @@
     --popover: 0 0% 3.9%;
     --popover-foreground: 0 0% 98%;
 
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
+    --primary: 0 60% 55%;
+    --primary-hover: 0 60% 48%;
+    --primary-foreground: 0 0% 98%;
 
     --secondary: 0 0% 14.9%;
     --secondary-foreground: 0 0% 98%;
@@ -93,8 +98,17 @@
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    background: #f8f9fa;
+    min-height: 100vh;
+    font-family: var(--font-sans);
+    color: hsl(var(--foreground));
+    /* White, a wash of the brand through the middle, white again. Fixed so a
+       long page does not run out of gradient and end on a hard edge. */
+    background: linear-gradient(180deg,
+            hsl(var(--background)) 0%,
+            hsl(var(--primary) / 0.05) 45%,
+            hsl(var(--background)) 100%);
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
 }
 
 /* ---------------------- */
@@ -102,10 +116,24 @@ body {
 /* ---------------------- */
 
 .header {
-    background: #2c3e50;
-    color: white;
-    padding: 16px 0;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    padding: 14px 0;
+    box-shadow: var(--shadow-sm);
+}
+
+/* Buttons inside the maroon bar cannot also be maroon. */
+.header .btn {
+    background: hsl(var(--primary-foreground) / 0.14);
+    color: hsl(var(--primary-foreground));
+    border: 1px solid hsl(var(--primary-foreground) / 0.22);
+}
+
+.header .btn:hover {
+    background: hsl(var(--primary-foreground) / 0.24);
 }
 
 .nav {
@@ -129,12 +157,12 @@ body {
 }
 
 .nav-links a {
-    color: white;
+    color: hsl(var(--primary-foreground));
     text-decoration: none;
 }
 
 .white-link {
-    color: white;
+    color: hsl(var(--primary-foreground));
     text-decoration: none;
 }
 
@@ -143,42 +171,59 @@ body {
 /* ---------------------- */
 
 .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
     padding: 8px 16px;
-    background: #3498db;
-    color: white;
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
     text-decoration: none;
-    border-radius: 4px;
+    border-radius: var(--radius);
     border: none;
     cursor: pointer;
+    transition: background-color 150ms ease;
 }
 
 .btn:hover {
-    background: #2980b9;
+    background: hsl(var(--primary-hover));
+}
+
+.btn:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+}
+
+.btn:hover {
+    background: hsl(var(--primary-hover));
 }
 
 .btn-success {
-    background: #27ae60;
+    background: hsl(var(--primary));
 }
 
 .btn-success:hover {
-    background: #229954;
+    background: hsl(var(--primary-hover));
 }
 
 .btn-secondary {
-    background: #95a5a6;
-    color: white !important;
+    background: hsl(var(--secondary));
+    color: hsl(var(--secondary-foreground)) !important;
+    border: 1px solid hsl(var(--border));
 }
 
 .btn-secondary:hover {
-    background: #7f8c8d;
+    background: hsl(var(--accent));
 }
 
 .link-button {
     display: inline-block;
     text-decoration: none;
-    color: white;
+    color: hsl(var(--primary-foreground));
     padding: 12px 24px;
-    border-radius: 4px;
+    border-radius: var(--radius);
 }
 
 /* ---------------------- */
@@ -192,7 +237,7 @@ body {
 }
 
 h1 {
-    color: #2c3e50;
+    color: hsl(var(--foreground));
     font-size: 32px;
 }
 
@@ -214,33 +259,34 @@ h1 {
 }
 
 .event-card {
-    background: white;
-    border-radius: 8px;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
     padding: 24px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    transition: transform 0.2s;
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.2s, box-shadow 150ms ease, border-color 150ms ease;
 }
 
 .event-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    box-shadow: var(--shadow-md);
 }
 
 .event-title {
     font-size: 20px;
     font-weight: 600;
-    color: #2c3e50;
+    color: hsl(var(--foreground));
     margin-bottom: 8px;
 }
 
 .event-meta {
-    color: #7f8c8d;
+    color: hsl(var(--muted-foreground));
     font-size: 14px;
     margin-bottom: 12px;
 }
 
 .event-description {
-    color: #34495e;
+    color: hsl(var(--foreground));
     line-height: 1.5;
     margin-bottom: 16px;
 }
@@ -256,25 +302,25 @@ h1 {
     align-items: center;
     gap: 8px;
     padding: 8px 12px;
-    background: #ecf0f1;
-    border-radius: 4px;
+    background: hsl(var(--muted));
+    border-radius: var(--radius);
 }
 
 .rating-value {
     font-weight: 600;
     font-size: 18px;
-    color: #2c3e50;
+    color: hsl(var(--foreground));
 }
 
 .rating-count {
-    color: #7f8c8d;
+    color: hsl(var(--muted-foreground));
     font-size: 14px;
 }
 
 .empty-state {
     text-align: center;
     padding: 60px 20px;
-    color: #7f8c8d;
+    color: hsl(var(--muted-foreground));
 }
 
 /* ---------------------- */
@@ -282,10 +328,10 @@ h1 {
 /* ---------------------- */
 
 .form-card {
-    background: white;
-    border-radius: 8px;
+    background: hsl(var(--card));
+    border-radius: var(--radius);
     padding: 40px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    box-shadow: var(--shadow-sm);
 }
 
 .form-group {
@@ -296,7 +342,7 @@ label {
     display: block;
     font-weight: 500;
     margin-bottom: 8px;
-    color: #2c3e50;
+    color: hsl(var(--foreground));
 }
 
 input,
@@ -304,8 +350,8 @@ textarea,
 select {
     width: 100%;
     padding: 12px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
     font-size: 14px;
 }
 
@@ -320,21 +366,21 @@ textarea {
 /* ---------------------- */
 
 .event-header {
-    background: white;
-    border-radius: 8px;
+    background: hsl(var(--card));
+    border-radius: var(--radius);
     padding: 32px;
     margin-bottom: 24px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    box-shadow: var(--shadow-sm);
 }
 
 .event-title {
     font-size: 32px;
-    color: #2c3e50;
+    color: hsl(var(--foreground));
     margin-bottom: 16px;
 }
 
 .event-description {
-    color: #34495e;
+    color: hsl(var(--foreground));
     line-height: 1.6;
     margin-top: 16px;
 }
@@ -342,11 +388,11 @@ textarea {
 /* ---------- Ratings ----------- */
 
 .rating-section {
-    background: white;
-    border-radius: 8px;
+    background: hsl(var(--card));
+    border-radius: var(--radius);
     padding: 32px;
     margin-bottom: 24px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    box-shadow: var(--shadow-sm);
 }
 
 .rating-display {
@@ -359,7 +405,7 @@ textarea {
 .big-rating {
     font-size: 64px;
     font-weight: 600;
-    color: #2c3e50;
+    color: hsl(var(--foreground));
 }
 
 .rating-breakdown {
@@ -381,25 +427,25 @@ textarea {
 .bar {
     flex: 1;
     height: 24px;
-    background: #ecf0f1;
-    border-radius: 4px;
+    background: hsl(var(--muted));
+    border-radius: var(--radius);
     overflow: hidden;
 }
 
 .bar-fill {
     height: 100%;
-    background: #3498db;
+    background: hsl(var(--primary));
     transition: width 0.3s;
 }
 
 .red-fill {
-    background: #e74c3c !important;
+    background: hsl(var(--destructive)) !important;
 }
 
 .rating-count {
     width: 60px;
     text-align: right;
-    color: #7f8c8d;
+    color: hsl(var(--muted-foreground));
 }
 
 /* Reaction Buttons */
@@ -412,45 +458,45 @@ textarea {
 .reaction-btn {
     flex: 1;
     padding: 16px;
-    border: 2px solid #ddd;
-    background: white;
-    border-radius: 8px;
+    border: 2px solid hsl(var(--border));
+    background: hsl(var(--card));
+    border-radius: var(--radius);
     cursor: pointer;
     font-size: 18px;
     transition: all 0.2s;
 }
 
 .reaction-btn:hover {
-    border-color: #3498db;
-    background: #ecf0f1;
+    border-color: hsl(var(--primary));
+    background: hsl(var(--muted));
 }
 
 .reaction-btn.active {
-    border-color: #3498db;
-    background: #3498db;
-    color: white;
+    border-color: hsl(var(--primary));
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
 }
 
 /* Comments */
 
 .comments-section {
-    background: white;
-    border-radius: 8px;
+    background: hsl(var(--card));
+    border-radius: var(--radius);
     padding: 32px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    box-shadow: var(--shadow-sm);
 }
 
 .comment-form {
     margin-bottom: 32px;
     padding-bottom: 32px;
-    border-bottom: 1px solid #ecf0f1;
+    border-bottom: 1px solid hsl(var(--border));
 }
 
 .comment-form textarea {
     width: 100%;
     padding: 12px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
     min-height: 80px;
     font-family: inherit;
     margin-bottom: 12px;
@@ -458,16 +504,16 @@ textarea {
 
 .comment-form button {
     padding: 10px 20px;
-    background: #3498db;
-    color: white;
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
     border: none;
-    border-radius: 4px;
+    border-radius: var(--radius);
     cursor: pointer;
 }
 
 .comment {
     padding: 16px 0;
-    border-bottom: 1px solid #ecf0f1;
+    border-bottom: 1px solid hsl(var(--border));
 }
 
 .comment:last-child {
@@ -482,22 +528,22 @@ textarea {
 
 .comment-author {
     font-weight: 600;
-    color: #2c3e50;
+    color: hsl(var(--foreground));
 }
 
 .comment-date {
-    color: #7f8c8d;
+    color: hsl(var(--muted-foreground));
     font-size: 14px;
 }
 
 .comment-text {
-    color: #34495e;
+    color: hsl(var(--foreground));
     line-height: 1.5;
 }
 
 .empty-comments {
     text-align: center;
-    color: #7f8c8d;
+    color: hsl(var(--muted-foreground));
     padding: 40px;
 }
 
@@ -507,19 +553,19 @@ textarea {
 
 .login-container,
 .register-container {
-    background: white;
-    border-radius: 8px;
+    background: hsl(var(--card));
+    border-radius: var(--radius);
     padding: 40px;
     width: 100%;
     max-width: 400px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--shadow-md);
     margin: auto;
     margin-top: 40px;
 }
 
 .login-container h1,
 .register-container h1 {
-    color: #2c3e50;
+    color: hsl(var(--foreground));
     margin-bottom: 24px;
     text-align: center;
 }
@@ -527,13 +573,336 @@ textarea {
 .link {
     text-align: center;
     margin-top: 20px;
-    color: #7f8c8d;
+    color: hsl(var(--muted-foreground));
 }
 
 .link a {
-    color: #3498db;
+    color: hsl(var(--primary));
     text-decoration: none;
 }
+/* ---------------------- */
+/* LANDING */
+/* ---------------------- */
+
+/*
+   The front page, and the only one that has to read well signed out. It uses
+   the same tokens and the same primitives as everything else -- the demo card
+   below is literally the chat fragment's classes, not a screenshot, so it
+   cannot drift away from what the product actually looks like.
+*/
+
+.landing {
+    font-size: 15px;
+    line-height: 1.6;
+}
+
+.landing .button-lg {
+    height: 2.875rem;
+    padding: 0 1.5rem;
+    font-size: 15px;
+}
+
+.landing .button-outline {
+    border-color: hsl(var(--border));
+    background: hsl(var(--card));
+    color: hsl(var(--foreground));
+}
+
+.landing .button-outline:hover {
+    border-color: hsl(var(--primary) / 0.4);
+    background: hsl(var(--primary) / 0.05);
+}
+
+/* -- nav --------------------------------------------------------------- */
+
+.landing-nav {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    height: 4rem;
+    padding: 0 1.5rem;
+    /* Translucent rather than solid, so the gradient behind it shows through
+       and the page reads as one surface while scrolling. */
+    background: hsl(var(--background) / 0.72);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid hsl(var(--border));
+}
+
+.landing-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.625rem;
+    color: hsl(var(--foreground));
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    text-decoration: none;
+}
+
+.landing-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    border-radius: calc(var(--radius) + 0.125rem);
+}
+
+.landing-mark svg {
+    width: 1.125rem;
+    height: 1.125rem;
+}
+
+.landing-nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* -- hero -------------------------------------------------------------- */
+
+.landing-hero {
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 4.5rem 1.5rem 2rem;
+    text-align: center;
+}
+
+.landing-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.375rem 0.875rem;
+    background: hsl(var(--primary) / 0.08);
+    border: 1px solid hsl(var(--primary) / 0.18);
+    border-radius: 9999px;
+    color: hsl(var(--primary));
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.landing-pill svg {
+    width: 0.875rem;
+    height: 0.875rem;
+}
+
+.landing-headline {
+    margin-top: 1.5rem;
+    font-size: clamp(2rem, 5vw, 3.25rem);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+}
+
+.landing-accent {
+    color: hsl(var(--primary));
+}
+
+.landing-subhead {
+    max-width: 40rem;
+    margin: 1.25rem auto 0;
+    color: hsl(var(--muted-foreground));
+    font-size: 17px;
+}
+
+.landing-cta {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-top: 2rem;
+}
+
+/* -- stats ------------------------------------------------------------- */
+
+.landing-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: 1rem;
+    margin-top: 3.5rem;
+    text-align: left;
+}
+
+.landing-stat {
+    padding: 1.125rem 1.25rem;
+    background: hsl(var(--primary) / 0.05);
+    border: 1px solid hsl(var(--primary) / 0.12);
+    border-radius: var(--radius);
+}
+
+.landing-stat-value {
+    color: hsl(var(--primary));
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+}
+
+.landing-stat-label {
+    margin-top: 0.25rem;
+    color: hsl(var(--muted-foreground));
+    font-size: 13px;
+}
+
+/* -- the demo card ----------------------------------------------------- */
+
+.landing-demo {
+    max-width: 46rem;
+    margin: 3.5rem auto 0;
+    padding: 0 1.5rem;
+}
+
+.landing-demo-card {
+    overflow: hidden;
+    box-shadow: var(--shadow-md);
+}
+
+.landing-demo-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.625rem 0.875rem;
+    background: hsl(var(--muted));
+    border-bottom: 1px solid hsl(var(--border));
+}
+
+.landing-dot {
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 9999px;
+    background: hsl(var(--border));
+}
+
+.landing-demo-title {
+    margin-left: 0.5rem;
+    color: hsl(var(--muted-foreground));
+    font-size: 12px;
+}
+
+.landing-demo-body {
+    padding: 1.25rem;
+}
+
+/*
+   The demo reuses .chat-event, which is an <a> in the real fragment and a
+   <span> here -- there is nothing to click in a mock-up. Spans are not flex
+   containers by default, so the layout is restated for them.
+*/
+.landing-demo-body .chat-event,
+.landing-demo-body .chat-event-meta,
+.landing-demo-body .chat-event-badges {
+    display: flex;
+}
+
+.landing-demo-body .chat-event-title {
+    display: block;
+}
+
+/* -- features ---------------------------------------------------------- */
+
+.landing-features {
+    max-width: 64rem;
+    margin: 4.5rem auto 0;
+    padding: 0 1.5rem;
+}
+
+.landing-section-title {
+    font-size: 1.5rem;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    text-align: center;
+}
+
+.landing-feature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: 1rem;
+    margin-top: 1.75rem;
+}
+
+.landing-feature {
+    padding: 1.5rem;
+}
+
+.landing-feature-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    background: hsl(var(--primary) / 0.08);
+    color: hsl(var(--primary));
+    border-radius: var(--radius);
+}
+
+.landing-feature-icon svg {
+    width: 1.125rem;
+    height: 1.125rem;
+}
+
+.landing-feature-title {
+    margin-top: 0.875rem;
+    font-size: 1rem;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+}
+
+.landing-feature-text {
+    margin-top: 0.5rem;
+    color: hsl(var(--muted-foreground));
+    font-size: 14px;
+}
+
+/* -- footer ------------------------------------------------------------ */
+
+.landing-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    max-width: 64rem;
+    margin: 4.5rem auto 0;
+    padding: 1.5rem;
+    border-top: 1px solid hsl(var(--border));
+    color: hsl(var(--muted-foreground));
+    font-size: 13px;
+}
+
+.landing-footer-links {
+    display: flex;
+    gap: 1rem;
+}
+
+.landing-footer-links a {
+    color: hsl(var(--muted-foreground));
+    text-decoration: none;
+}
+
+.landing-footer-links a:hover {
+    color: hsl(var(--primary));
+    text-decoration: underline;
+}
+
+@media (max-width: 40rem) {
+    .landing-nav {
+        padding: 0 1rem;
+    }
+
+    .landing-brand span:last-child {
+        display: none;
+    }
+
+    .landing-hero {
+        padding-top: 3rem;
+    }
+}
+
 /* ---------------------- */
 /* CHAT */
 /* ---------------------- */
@@ -546,13 +915,8 @@ textarea {
 */
 
 .chat-page {
-    min-height: 100vh;
-    background: hsl(var(--background));
-    color: hsl(var(--foreground));
-    font-family: var(--font-sans);
     font-size: 14px;
     line-height: 1.5;
-    -webkit-font-smoothing: antialiased;
 }
 
 .chat-page *,
@@ -563,7 +927,7 @@ textarea {
 
 /* -- primitives ------------------------------------------------------- */
 
-.chat-page .card {
+.card {
     background: hsl(var(--card));
     color: hsl(var(--card-foreground));
     border: 1px solid hsl(var(--border));
@@ -571,7 +935,7 @@ textarea {
     box-shadow: var(--shadow-sm);
 }
 
-.chat-page .badge {
+.badge {
     display: inline-flex;
     align-items: center;
     border: 1px solid transparent;
@@ -583,17 +947,17 @@ textarea {
     white-space: nowrap;
 }
 
-.chat-page .badge-secondary {
+.badge-secondary {
     background: hsl(var(--secondary));
     color: hsl(var(--secondary-foreground));
 }
 
-.chat-page .badge-outline {
+.badge-outline {
     border-color: hsl(var(--border));
     color: hsl(var(--muted-foreground));
 }
 
-.chat-page .button {
+.button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -610,35 +974,35 @@ textarea {
     transition: background-color 150ms ease, opacity 150ms ease;
 }
 
-.chat-page .button:focus-visible {
+.button:focus-visible {
     outline: 2px solid hsl(var(--ring));
     outline-offset: 2px;
 }
 
-.chat-page .button:disabled {
+.button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }
 
-.chat-page .button-primary {
+.button-primary {
     background: hsl(var(--primary));
     color: hsl(var(--primary-foreground));
 }
 
-.chat-page .button-primary:hover:not(:disabled) {
-    background: hsl(var(--primary) / 0.9);
+.button-primary:hover:not(:disabled) {
+    background: hsl(var(--primary-hover));
 }
 
-.chat-page .button-ghost {
+.button-ghost {
     color: hsl(var(--foreground));
 }
 
-.chat-page .button-ghost:hover {
+.button-ghost:hover {
     background: hsl(var(--accent));
     color: hsl(var(--accent-foreground));
 }
 
-.chat-page .input {
+.input {
     flex: 1;
     min-width: 0;
     height: 2.5rem;
@@ -651,11 +1015,11 @@ textarea {
     font-size: 14px;
 }
 
-.chat-page .input::placeholder {
+.input::placeholder {
     color: hsl(var(--muted-foreground));
 }
 
-.chat-page .input:focus {
+.input:focus {
     outline: 2px solid hsl(var(--ring));
     outline-offset: 2px;
 }
@@ -986,21 +1350,21 @@ textarea {
     display: block;
     text-align: center;
     padding: 11px;
-    background: white;
-    color: #2c3e50;
-    border: 1px solid #dfe4ea;
+    background: hsl(var(--card));
+    color: hsl(var(--foreground));
+    border: 1px solid hsl(var(--border));
     font-weight: 600;
 }
 
 .provider-btn:hover {
-    background: #f8f9fa;
-    border-color: #b2bec3;
+    background: hsl(var(--muted));
+    border-color: hsl(var(--foreground) / 0.2);
 }
 
 .provider-divider {
     display: flex;
     align-items: center;
-    color: #95a5a6;
+    color: hsl(var(--muted-foreground));
     font-size: 13px;
     margin-bottom: 20px;
 }
@@ -1010,7 +1374,7 @@ textarea {
     content: "";
     flex: 1;
     height: 1px;
-    background: #eef1f4;
+    background: hsl(var(--muted));
 }
 
 .provider-divider span {
@@ -1018,9 +1382,9 @@ textarea {
 }
 
 .auth-error {
-    background: #fdecea;
-    color: #c0392b;
-    border-radius: 4px;
+    background: hsl(var(--destructive) / 0.08);
+    color: hsl(var(--destructive));
+    border-radius: var(--radius);
     padding: 12px;
     margin-bottom: 20px;
     font-size: 14px;
