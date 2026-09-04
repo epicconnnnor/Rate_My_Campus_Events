@@ -20,7 +20,8 @@ from zoneinfo import ZoneInfo
 
 from sqlmodel import Session, select
 
-from app.core.config import RETRIEVAL_MAX_DISTANCE, RETRIEVAL_TOP_K
+from app.core.config import (DEMO_DATE, RETRIEVAL_MAX_DISTANCE,
+                             RETRIEVAL_TOP_K)
 from app.db.database import engine
 from app.models.event import Event, EventEmbedding
 from app.rag.providers import (
@@ -55,6 +56,17 @@ NOTHING_FOUND = (
 )
 
 
+def current_campus_date() -> date:
+    """What the app should treat as today.
+
+    DEMO_DATE wins where it is set, so a local run can stand inside the frozen
+    events and have something to find. Everything that retrieves goes through
+    here rather than calling the clock, which is why the eval can pass its own
+    date in and get the same behaviour.
+    """
+    return DEMO_DATE or datetime.now(CAMPUS_TZ).date()
+
+
 # =============================================================================
 # SHAPES
 # =============================================================================
@@ -68,6 +80,10 @@ class QueryFilters:
     end: datetime  # exclusive
     free: Optional[bool] = None
     experience: Optional[str] = None
+    # One of the calendar's own event_types, matched exactly. The model is not
+    # asked for this -- it would invent plausible categories that are not in
+    # the feed -- so it is only ever set by a chip the person tapped.
+    category: Optional[str] = None
     keywords: List[str] = field(default_factory=list)
 
     def widened(self, days: int) -> "QueryFilters":
@@ -76,6 +92,7 @@ class QueryFilters:
             end=self.end + timedelta(days=days),
             free=self.free,
             experience=self.experience,
+            category=self.category,
             keywords=self.keywords,
         )
 
@@ -87,6 +104,51 @@ class QueryFilters:
         the sentence is all there is.
         """
         return ", ".join(self.keywords) if self.keywords else question
+
+
+@dataclass
+class FilterOverrides:
+    """What the person set by hand, which beats what the model read.
+
+    The chips above the chat box are not hints. Somebody who taps "free" has
+    said something the sentence may not, and where the sentence said it too the
+    override changes nothing. Only fields that are set here are touched; the
+    rest of the extraction stands, so tapping "virtual" does not throw away the
+    dates the question asked for.
+    """
+
+    free: Optional[bool] = None
+    experience: Optional[str] = None
+    category: Optional[str] = None
+
+    @classmethod
+    def from_form(cls, free=None, experience=None,
+                  category=None) -> "FilterOverrides":
+        """Built from whatever the browser sent, believing none of it.
+
+        Same posture as extract_filters: anything unrecognised becomes "not
+        asked for" rather than an error. A hand-edited form should widen the
+        search, never break the page.
+        """
+        experience = (experience or "").strip().lower() or None
+        if experience not in VALID_EXPERIENCES:
+            experience = None
+
+        category = (category or "").strip() or None
+
+        return cls(free=free if isinstance(free, bool) else None,
+                   experience=experience, category=category)
+
+    def __bool__(self) -> bool:
+        return any((self.free is not None, self.experience, self.category))
+
+    def apply(self, filters: QueryFilters) -> None:
+        if self.free is not None:
+            filters.free = self.free
+        if self.experience is not None:
+            filters.experience = self.experience
+        if self.category is not None:
+            filters.category = self.category
 
 
 @dataclass
@@ -253,6 +315,12 @@ def search_events(filters: QueryFilters, query_vector: List[float], *,
             statement = statement.where(Event.is_free == filters.free)
         if filters.experience is not None:
             statement = statement.where(Event.experience == filters.experience)
+        if filters.category is not None:
+            # '<category> = ANY (events.event_types)'. An event with no types
+            # at all is NULL here and drops out, which is the right answer.
+            statement = statement.where(
+                Event.event_types.any(filters.category)
+            )
         if max_distance is not None:
             statement = statement.where(distance <= max_distance)
 
@@ -330,14 +398,17 @@ def retrieve(question: str, *,
              chat: Optional[ChatProvider] = None,
              embedder: Optional[EmbeddingProvider] = None,
              search: Optional[SearchFn] = None,
+             overrides: Optional[FilterOverrides] = None,
              top_k: int = RETRIEVAL_TOP_K,
              max_distance: float = RETRIEVAL_MAX_DISTANCE) -> RetrievalResult:
     """Question in, events out, with three fallbacks before giving up."""
     chat = chat or get_chat_provider()
     search = search or search_events
-    today = today or datetime.now(CAMPUS_TZ).date()
+    today = today or current_campus_date()
 
     filters = extract_filters(question, today, chat)
+    if overrides:
+        overrides.apply(filters)
 
     embedder = embedder or get_embedding_provider()
     query_vector = embedder.embed_query(filters.search_text(question))

@@ -18,9 +18,11 @@ from app.rag.retriever import (
     MAX_WINDOW_DAYS,
     NOTHING_FOUND,
     WIDEN_DAYS,
+    FilterOverrides,
     Match,
     QueryFilters,
     build_extraction_prompt,
+    current_campus_date,
     describe_match,
     extract_filters,
     format_event_time,
@@ -384,3 +386,150 @@ def test_the_answer_and_the_judge_are_shown_the_same_time():
     # And neither of them leaks the stored value it was rendered from.
     assert "20:00" not in answer_side
     assert "20:00" not in judge_side
+
+
+# =============================================================================
+# THE CHIPS
+# =============================================================================
+#
+# The filter chips above the chat box are not a second filter applied to the
+# answer. They are handed to retrieval and beat whatever the model read out of
+# the sentence, which is the only way "free" can mean free rather than mean a
+# hint that a model is free to ignore.
+
+
+def test_an_override_beats_what_the_model_read():
+    filters = QueryFilters(start=midnight(SUNDAY), end=midnight(SUNDAY),
+                           free=False)
+    FilterOverrides(free=True).apply(filters)
+    assert filters.free is True
+
+
+def test_an_unset_override_leaves_the_extraction_alone():
+    """Tapping "virtual" must not throw away the dates the sentence asked for,
+    nor un-set a "free" the model correctly read."""
+    filters = QueryFilters(start=midnight(SUNDAY), end=midnight(SUNDAY),
+                           free=True, keywords=["music"])
+    FilterOverrides(experience="virtual").apply(filters)
+
+    assert filters.experience == "virtual"
+    assert filters.free is True
+    assert filters.keywords == ["music"]
+
+
+def test_no_chips_at_all_changes_nothing():
+    filters = QueryFilters(start=midnight(SUNDAY), end=midnight(SUNDAY),
+                           free=True, experience="inperson")
+    FilterOverrides().apply(filters)
+    assert (filters.free, filters.experience) == (True, "inperson")
+
+
+def test_an_empty_set_of_overrides_is_falsy():
+    """retrieve() skips the whole step on this, so it has to be honest."""
+    assert not FilterOverrides()
+    assert FilterOverrides(free=True)
+    assert FilterOverrides(category="Lecture")
+
+
+def test_the_chips_reach_every_rung_of_the_ladder():
+    """Not just the first search. A widened retry that quietly dropped the
+    chips would answer a question nobody asked."""
+    search = RecordingSearch([], [], [Match(fake_event(), 1.5)])
+    chat = StubChat(extraction(), "here is something else")
+
+    retrieve("anything?", today=SUNDAY, chat=chat, embedder=StubEmbedder(),
+             search=search, overrides=FilterOverrides(free=True,
+                                                      category="Lecture"))
+
+    assert search.calls
+    for call in search.calls:
+        assert call["filters"].free is True
+        assert call["filters"].category == "Lecture"
+
+
+# -- what arrives from the browser is not trusted --------------------------
+
+
+def test_an_unticked_box_is_not_a_search_for_paid_events():
+    """Absent means "not asked for". Reading it as False would quietly hide
+    every free event the moment somebody did not tick the box."""
+    assert FilterOverrides.from_form(free=None).free is None
+    assert FilterOverrides.from_form().free is None
+
+
+def test_a_ticked_box_asks_for_free_events():
+    assert FilterOverrides.from_form(free=True).free is True
+
+
+@pytest.mark.parametrize("value", ["online", "", "   ", "INPERSON; DROP"])
+def test_an_experience_outside_the_three_known_values_is_dropped(value):
+    """Same posture as extract_filters: junk widens the search, never breaks
+    the page and never reaches the query."""
+    assert FilterOverrides.from_form(experience=value).experience is None
+
+
+def test_a_known_experience_comes_through_in_any_case():
+    assert FilterOverrides.from_form(experience="Virtual").experience == "virtual"
+    assert FilterOverrides.from_form(experience=" hybrid ").experience == "hybrid"
+
+
+def test_the_any_category_chip_posts_an_empty_string():
+    """The default radio has value="", which has to read as no category rather
+    than as a category nothing is filed under."""
+    assert FilterOverrides.from_form(category="").category is None
+    assert FilterOverrides.from_form(category="   ").category is None
+
+
+def test_a_category_is_taken_as_written():
+    """Matched against the calendar's own event_types, so it is not lowercased
+    or otherwise tidied on the way through."""
+    assert FilterOverrides.from_form(category="Film Screening").category == (
+        "Film Screening"
+    )
+
+
+def test_a_category_survives_the_widening():
+    """widened() rebuilds the filters field by field, so anything added to
+    QueryFilters and forgotten there vanishes on the first fallback."""
+    filters = QueryFilters(start=midnight(SUNDAY), end=midnight(SUNDAY),
+                           category="Lecture", free=True,
+                           experience="virtual", keywords=["talk"])
+    widened = filters.widened(WIDEN_DAYS)
+
+    assert widened.category == "Lecture"
+    assert widened.free is True
+    assert widened.experience == "virtual"
+    assert widened.keywords == ["talk"]
+
+
+# =============================================================================
+# WHAT COUNTS AS TODAY
+# =============================================================================
+
+
+def test_today_is_the_real_date_when_demo_date_is_unset(monkeypatch):
+    import app.rag.retriever as retriever
+
+    monkeypatch.setattr(retriever, "DEMO_DATE", None)
+    assert current_campus_date() == datetime.now(CAMPUS_TZ).date()
+
+
+def test_demo_date_moves_what_the_app_calls_today(monkeypatch):
+    """A clone started outside the frozen window searches a calendar it has
+    already walked past, and every question comes back empty."""
+    import app.rag.retriever as retriever
+
+    monkeypatch.setattr(retriever, "DEMO_DATE", date(2026, 9, 2))
+    assert current_campus_date() == date(2026, 9, 2)
+
+
+def test_an_explicit_today_still_wins_over_demo_date(monkeypatch):
+    """The eval passes EVAL_TODAY in. Nothing about a demo setting may move
+    what the judged run is standing on."""
+    import app.rag.retriever as retriever
+
+    monkeypatch.setattr(retriever, "DEMO_DATE", date(2026, 10, 1))
+    search = RecordingSearch([Match(fake_event(), 0.1)])
+    result, _ = run(search)
+
+    assert result.filters.start == midnight(date(2026, 9, 11))

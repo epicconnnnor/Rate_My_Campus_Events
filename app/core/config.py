@@ -5,6 +5,7 @@ Global configuration
 """
 
 import os
+from datetime import date
 
 # =============================================================================
 # JWT CONFIGURATION
@@ -160,6 +161,41 @@ CHAT_REQUESTS_PER_MINUTE = int(os.getenv("CHAT_REQUESTS_PER_MINUTE") or "12")
 
 # How many chat questions one user may ask per calendar day, campus time.
 CHAT_DAILY_LIMIT = int(os.getenv("CHAT_DAILY_LIMIT", "20"))
+
+
+def _parse_demo_date(value):
+    """DEMO_DATE, or nothing, and a clear complaint in between.
+
+    Silently ignoring a typo here is the cruellest option: the app comes up,
+    every question returns nothing, and the calendar looks broken rather than
+    misconfigured.
+    """
+    value = (value or "").strip()
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        raise RuntimeError(
+            f"DEMO_DATE={value!r} is not a date. Use YYYY-MM-DD, for example "
+            "DEMO_DATE=2026-09-02, which is the first day of the frozen demo "
+            "events in app/test/fixtures/events.json."
+        ) from None
+
+
+# What the app calls "today" when it goes looking for events. Unset means the
+# real date, which is what anything deployed wants.
+#
+# A local run wants the opposite. The frozen events run from 2026-09-02 to
+# 2026-11-12, so a clone started outside that window searches a calendar it has
+# already walked past, every question comes back empty, and the bot looks
+# broken rather than the database looking stale. Pinning this to a day inside
+# the window gives a demo something to find -- the same trick EVAL_TODAY plays
+# for the eval, for the same reason.
+#
+# It moves the calendar only. The daily question quota still counts real days,
+# because that is about the person asking, not about what is on.
+DEMO_DATE = _parse_demo_date(os.getenv("DEMO_DATE"))
 
 
 # =============================================================================

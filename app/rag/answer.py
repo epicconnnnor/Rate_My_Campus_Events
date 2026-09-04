@@ -12,8 +12,8 @@ from datetime import date
 from typing import List, Optional
 
 from app.rag.providers import ChatProvider, EmbeddingProvider, get_chat_provider
-from app.rag.retriever import (Match, RetrievalResult, describe_match,
-                                retrieve)
+from app.rag.retriever import (FilterOverrides, Match, RetrievalResult,
+                                describe_match, retrieve)
 
 log = logging.getLogger("answer")
 
@@ -58,7 +58,8 @@ def phrase_answer(question: str, matches: List[Match],
 def answer_question(question: str, *,
                     today: Optional[date] = None,
                     chat: Optional[ChatProvider] = None,
-                    embedder: Optional[EmbeddingProvider] = None) -> Answer:
+                    embedder: Optional[EmbeddingProvider] = None,
+                    overrides: Optional[FilterOverrides] = None) -> Answer:
     """Retrieve, then say it out loud.
 
     The two outcomes that already carry their own wording -- a redirect to
@@ -68,7 +69,8 @@ def answer_question(question: str, *,
     chat = chat or get_chat_provider()
 
     result: RetrievalResult = retrieve(
-        question, today=today, chat=chat, embedder=embedder
+        question, today=today, chat=chat, embedder=embedder,
+        overrides=overrides,
     )
 
     if result.outcome == "matches":
