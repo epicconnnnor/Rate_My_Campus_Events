@@ -48,11 +48,20 @@ def clock(monkeypatch):
 # =============================================================================
 
 
-def test_the_limits_are_googles_numbers_not_ours():
+def test_the_document_limit_is_googles_number_not_ours():
     assert FREE_TIER_DOCUMENTS_PER_MINUTE == 100
-    # The Flash-Lite models. The non-lite ones are 5, which is why this moves
-    # with CHAT_MODEL rather than standing on its own.
-    assert CHAT_REQUESTS_PER_MINUTE == 15
+
+
+def test_chat_paces_under_the_published_ceiling():
+    """The Flash-Lite models publish 15 a minute, and the chat pacer is the one
+    limit here that is deliberately not the published number. Pacing to exactly
+    15 meant arriving at 14 and 15 of 15 every minute, leaving nothing for what
+    a single process cannot see: another job on the same project, a local run,
+    a clock behind the server's."""
+    assert CHAT_REQUESTS_PER_MINUTE == 12
+    # The non-lite models are 5, which is why this still moves with CHAT_MODEL
+    # rather than standing on its own.
+    assert CHAT_REQUESTS_PER_MINUTE < 15
 
 
 def test_staying_under_the_limit_never_waits(clock):
@@ -142,13 +151,13 @@ def test_chat_and_judge_do_not_share_a_count():
     assert chat_pacer("chat-model") is not chat_pacer("judge-model")
 
 
-def test_chat_stays_under_fifteen_a_minute(clock):
+def test_chat_stays_under_its_limit_a_minute(clock):
     pacer = Pacer(CHAT_REQUESTS_PER_MINUTE, "requests")
     for _ in range(CHAT_REQUESTS_PER_MINUTE):
         pacer.reserve(1)
     assert clock.slept == []
 
-    # The sixteenth in the same minute is the one that would be refused.
+    # The one after that is where the window has to roll.
     pacer.reserve(1)
     assert len(clock.slept) == 1
     assert clock.slept[0] >= 60
@@ -156,7 +165,9 @@ def test_chat_stays_under_fifteen_a_minute(clock):
 
 def test_an_eval_run_of_two_calls_a_question_waits_once(clock):
     """Nine golden questions, two chat calls each -- reading the question and
-    writing the answer -- is 18 in a burst against a limit of 15."""
+    writing the answer -- is 18 in a burst against a limit of 12. Still one
+    waited window, the same as it cost at 15: dropping the ceiling bought the
+    headroom without buying another minute of CI."""
     pacer = Pacer(CHAT_REQUESTS_PER_MINUTE, "requests")
     for _ in range(18):
         pacer.reserve(1)
