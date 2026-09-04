@@ -81,6 +81,21 @@ EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "gemini-embedding-001")
 # model id instead of a retired one.
 CHAT_MODEL = os.getenv("CHAT_MODEL", "gemini-3.6-flash")
 
+# The model the eval's judge reads with. Deliberately its own setting rather
+# than reusing CHAT_MODEL, for two reasons.
+#
+# Quotas are per project per model, so putting the judge on a different model
+# gives it a separate daily allowance -- the eval needs about 20 generation
+# calls and the free tier allows 20 per model per day, which one model cannot
+# cover on its own.
+#
+# It is also the right shape: a judge checking an answer for invented detail
+# should not be the same model that wrote it.
+#
+# Leaving this equal to CHAT_MODEL defeats both purposes -- same bucket, same
+# reader -- so point it at a different flash model.
+JUDGE_MODEL = os.getenv("JUDGE_MODEL") or CHAT_MODEL
+
 # Baked into the vector column type by migration 0004. Changing it is a schema
 # change plus a full re-index, not a config tweak -- keep the two in step.
 #

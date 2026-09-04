@@ -50,6 +50,9 @@ jobs:
       DATABASE_PORT: "5432"
       DATABASE_NAME: eval
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      # Set the JUDGE_MODEL repository variable to give the judge its own
+      # daily quota. Empty falls back to CHAT_MODEL, which shares one.
+      JUDGE_MODEL: ${{ vars.JUDGE_MODEL }}
       # Only a fork's pull request is allowed to skip: it cannot read the
       # repository's secrets. A push or a same-repo pull request that finds
       # no key fails, rather than going green having judged nothing.
