@@ -14,7 +14,8 @@ from app.core.config import CHAT_REQUESTS_PER_MINUTE
 from app.rag import pacing
 from app.rag.indexer import FREE_TIER_DOCUMENTS_PER_MINUTE, _document_pacer
 from app.rag.pacing import Pacer
-from app.rag.providers import (SERVER_BACKOFF_CAP_SECONDS,
+from app.rag.providers import (SERVER_BACKOFF_BASE_SECONDS,
+                               SERVER_BACKOFF_CAP_SECONDS,
                                _is_daily_quota, _quota_ids,
                                SERVER_RETRY_ATTEMPTS, _is_quota_error,
                                _is_server_error, _quota_delay,
@@ -262,14 +263,29 @@ def test_server_backoff_is_capped():
     assert _server_delay(FakeError(REAL_503, code=503), 20) == SERVER_BACKOFF_CAP_SECONDS
 
 
-def test_the_server_budget_is_about_a_minute_of_patience():
+def test_the_server_budget_is_about_eight_minutes_of_patience():
     """Long enough to outlast a demand spike, short enough that a real outage
-    still fails the run rather than hanging CI."""
+    still fails the run rather than hanging CI.
+
+    It was a minute, and a minute kept losing runs to spikes that passed. The
+    upper bound is the half of that trade worth guarding: this is spent per
+    call, so it is the number that decides how long a dead model hangs the job.
+    """
     total = sum(
         _server_delay(FakeError(REAL_503, code=503), n)
         for n in range(1, SERVER_RETRY_ATTEMPTS)
     )
-    assert 30 <= total <= 180
+    assert 420 <= total <= 600
+
+
+def test_the_cap_is_what_keeps_the_last_attempts_from_running_away():
+    """Without it the ninth wait alone would be over eight minutes, and the
+    budget above would be nearer twenty than eight."""
+    uncapped = SERVER_BACKOFF_BASE_SECONDS * (2 ** (SERVER_RETRY_ATTEMPTS - 2))
+    assert uncapped > SERVER_BACKOFF_CAP_SECONDS
+    assert _server_delay(
+        FakeError(REAL_503, code=503), SERVER_RETRY_ATTEMPTS - 1
+    ) == SERVER_BACKOFF_CAP_SECONDS
 
 
 def test_the_two_policies_do_not_share_a_delay_calculation():
