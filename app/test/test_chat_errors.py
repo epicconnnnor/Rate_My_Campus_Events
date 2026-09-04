@@ -29,7 +29,23 @@ USER = {"user_id": 1, "name": "Test Person", "email": "test@example.com"}
 
 @pytest.fixture
 def client(monkeypatch):
-    """The app with its edges stubbed: signed in, under quota, no model."""
+    """The app with its edges stubbed: signed in, under quota, no model.
+
+    app.main calls require_secret_key() at import, so importing it without one
+    raises before any test body runs. The unit job deliberately sets no
+    secrets -- it is the suite that needs neither a key nor a database -- so
+    the value is supplied here rather than added to the workflow. It signs
+    nothing: no request in this file carries a token.
+
+    Patched on the config module rather than in the environment. config reads
+    SECRET_KEY once at import and require_secret_key() checks that module
+    global, so by the time any test runs the value has already been read and
+    setenv would be shouting at a closed door.
+    """
+    import app.core.config as config
+    monkeypatch.setattr(config, "SECRET_KEY",
+                        "not-a-real-key-nothing-here-is-signed")
+
     import app.api.routes_chat as routes
     from app.main import app
 
