@@ -1,27 +1,55 @@
+{#
+    One exchange, appended to the message list. Errors are an exchange too --
+    they arrive with an honest status code and are swapped in deliberately, so
+    they belong in the transcript rather than replacing it.
+#}
 {% if error %}
-<div class="chat-card chat-error">{{ error }}</div>
-{% else %}
-<div class="chat-card">
-    <div class="chat-question">{{ question }}</div>
-    <div class="chat-answer">{{ answer.text }}</div>
-
-    {% if events %}
-    <div class="chat-events">
-        {% for event in events %}
-        <a class="chat-event" href="/event/{{ event.event_id }}{% if token %}?token={{ token }}{% endif %}">
-            <div class="chat-event-title">{{ event.title }}</div>
-            <div class="event-meta">
-                📆 {{ event.when or 'Date to be announced' }}
-                {% if event.location %} • 📍 {{ event.location }}{% endif %}
-            </div>
-        </a>
-        {% endfor %}
-    </div>
-    {% endif %}
-
-    {% if answer.outcome == 'alternatives' %}
-    <div class="chat-note">Nothing matched exactly, so these are the closest.</div>
-    {% endif %}
+<div class="chat-exchange">
+    <div class="card chat-error">{{ error }}</div>
 </div>
-<div class="chat-quota-line">{{ used }} of {{ limit }} questions used today</div>
+{% else %}
+<div class="chat-exchange">
+    <div class="chat-question">{{ question }}</div>
+
+    <div class="card">
+        <div class="chat-answer">{{ answer.text }}</div>
+
+        {% if events %}
+        <div class="chat-events">
+            {% for event in events %}
+            <a class="card chat-event" href="/event/{{ event.event_id }}{% if token %}?token={{ token }}{% endif %}">
+                <div class="chat-event-title">{{ event.title }}</div>
+
+                <div class="chat-event-meta">
+                    <span>{{ event.when or 'Date to be announced' }}</span>
+                    {% if event.location %}<span>{{ event.location }}</span>{% endif %}
+                    {% if event.organizer %}<span>{{ event.organizer }}</span>{% endif %}
+                </div>
+
+                {# Only what the calendar actually says. A missing is_free is
+                   unknown, not paid, so it gets no badge either way. #}
+                {% if event.is_free or event.experience in ('virtual', 'hybrid') %}
+                <div class="chat-event-badges">
+                    {% if event.is_free %}<span class="badge badge-secondary">Free</span>{% endif %}
+                    {% if event.experience == 'virtual' %}
+                    <span class="badge badge-outline">Virtual</span>
+                    {% elif event.experience == 'hybrid' %}
+                    <span class="badge badge-outline">Hybrid</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </a>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if answer.outcome == 'alternatives' %}
+        <div class="chat-note">
+            Nothing matched exactly, so these are the closest.
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="chat-quota-line">{{ used }} of {{ limit }} questions used today</div>
+</div>
 {% endif %}

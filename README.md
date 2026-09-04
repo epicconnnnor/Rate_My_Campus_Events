@@ -10,6 +10,71 @@ Python 3.13+
 Docker (for PostgreSQL)
 pip (Python package manager)
 
+## Run the chat UI locally
+
+Five steps from a fresh clone to asking the bot a question in a browser.
+
+**1. Start Postgres.** It must be the `pgvector` image -- semantic search keeps
+its vectors in the database, and `alembic upgrade head` fails on a stock
+`postgres` with `extension "vector" is not available`.
+
+    docker run -d --name dev_pg \
+      -e POSTGRES_USER=app -e POSTGRES_PASSWORD=app -e POSTGRES_DB=db \
+      -p 5432:5432 pgvector/pgvector:pg16
+
+Already have the container from a previous run? `docker start dev_pg`.
+
+**2. Set the environment.**
+
+    export DATABASE_HOST=localhost          # 'dev_pg' is the in-container name
+    export SECRET_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
+    export GEMINI_API_KEY="your_key"
+    export DEMO_DATE=2026-09-02
+
+`DEMO_DATE` is what makes this worth doing. The demo events run from
+2026-09-02 to 2026-11-12, so without it the app searches a calendar the clock
+has already walked past, every question comes back empty, and the bot looks
+broken when the database is merely stale.
+
+**3. One command: install, migrate, load the events, embed them, serve.**
+
+    pip install -r requirements.txt \
+      && alembic upgrade head \
+      && python -m app.demo_seed --embed \
+      && uvicorn app.main:app --reload
+
+`app.demo_seed` loads the same 102 frozen events the eval judges against, and
+`--embed` does the same work as `python -m app.rag.backfill`. It spends about
+102 of the day's 1000 free embedding requests the first time and nothing on a
+re-run, because an event whose text has not changed is skipped.
+
+**4. Make an account.** The chat page is behind a login. Open
+<http://localhost:8000/register>, register with any email and password -- it
+is your local database -- and you land signed in.
+
+**5. Ask it something.** Open <http://localhost:8000/chat> and try:
+
+- *what's happening this weekend?*
+- *any free events coming up?*
+- *what's on this weekend that isn't a lecture?*
+- *anything funny happening, like comedy or improv?*
+
+The chips above the input pre-set the search rather than filtering the answer
+afterwards: **Free** and **Virtual** override whatever the model read out of
+your sentence, and the category chips are the calendar's own event types, read
+from the database, so a chip never offers a category nothing is filed under.
+
+### Without a Gemini key
+
+    export RAG_PROVIDER=fake
+    python -m app.demo_seed --embed
+
+The pages, the chips, the cards and the spinner all work. The answers do not:
+the fake provider returns deterministic stub vectors and the literal string
+"fake completion", so it is worth exactly one thing -- seeing the interface
+without spending a quota.
+
+
 ## HOW TO SETUP&&RUN 
 
 ### Step 1: Clone/Navigate to the Project Directory
@@ -105,6 +170,10 @@ Then embed every event:
 
 python -m app.ingest.localist   # pull events from the UMass calendar
 python -m app.rag.backfill      # embed them
+
+For a local run, `python -m app.demo_seed --embed` is usually what you want
+instead of the first line: the frozen demo events do not need the network and
+do not change week to week. See "Run the chat UI locally" above.
 
 Both are safe to re-run. The backfill only spends an API call on events whose
 text actually changed, so a second run embeds nothing.

@@ -16,11 +16,12 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import text
 
 from app.api.routes_events import get_current_user
-from app.core.config import CHAT_DAILY_LIMIT
+from app.core.config import CHAT_DAILY_LIMIT, DEMO_DATE
 from app.db import database as db
 from app.db.database import engine
 from app.rag.answer import answer_question
-from app.rag.retriever import CAMPUS_TZ
+from app.rag.retriever import (CAMPUS_TZ, FilterOverrides,
+                                current_campus_date)
 
 log = logging.getLogger("chat")
 
@@ -37,6 +38,11 @@ BROKEN = (
 )
 
 
+# How many category chips to offer. Enough to be useful, few enough that the
+# row does not wrap into a wall above the input.
+CATEGORY_CHIPS = 6
+
+
 def _for_display(match):
     """Flatten a match into what the template needs, with the time already in
     campus time -- Jinja is the wrong place to be doing timezone maths."""
@@ -49,12 +55,44 @@ def _for_display(match):
         # not portable.
         when = f"{local:%a %b %d}, {local.hour % 12 or 12}:{local:%M %p}"
 
+    groups = event.get("groups") or []
+
     return {
         "event_id": event.get("event_id"),
         "title": event.get("title"),
         "location": event.get("location"),
         "when": when,
+        # One organizer on the card. The feed lists co-hosts and a card is not
+        # the place to read all of them.
+        "organizer": groups[0] if groups else None,
+        "is_free": event.get("is_free"),
+        "experience": event.get("experience"),
     }
+
+
+def _categories(limit=CATEGORY_CHIPS):
+    """The calendar's own most common event types.
+
+    Read from the data rather than written down here, because a chip for a
+    category nothing is filed under is a chip that always returns nothing.
+    Empty on a database that is not up yet -- the page still works, it just
+    offers fewer chips.
+    """
+    # unnest belongs in FROM, not in the select list. A set-returning function
+    # in the target list is expanded after grouping, so the obvious
+    # "SELECT unnest(...) ... GROUP BY" does not mean what it reads like.
+    statement = text(
+        "SELECT category, count(*) AS total "
+        "FROM events, unnest(event_types) AS category "
+        "GROUP BY category ORDER BY total DESC, category LIMIT :limit"
+    )
+    try:
+        with engine.connect() as connection:
+            return [row.category
+                    for row in connection.execute(statement, {"limit": limit})]
+    except Exception:
+        log.exception("chat: could not read the category list")
+        return []
 
 
 # =============================================================================
@@ -105,6 +143,10 @@ async def chat_page(
             "token": token,
             "used": used,
             "limit": CHAT_DAILY_LIMIT,
+            "categories": _categories(),
+            # Shown in the page when it is set, so a demo that is standing in
+            # September 2026 says so rather than quietly lying about "today".
+            "demo_date": DEMO_DATE,
         },
     )
 
@@ -118,6 +160,11 @@ async def chat_page(
 async def chat(
     request: Request,
     question: str = Form(...),
+    # The chips. Absent means "not asked for", which is not the same as false:
+    # an unticked "free" must not turn into a search for paid events only.
+    free: Optional[str] = Form(None),
+    experience: Optional[str] = Form(None),
+    category: Optional[str] = Form(None),
     current_user: Optional[dict] = Depends(get_current_user),
     token: Optional[str] = Query(None),
 ):
@@ -164,8 +211,14 @@ async def chat(
             status_code=429,
         )
 
+    overrides = FilterOverrides.from_form(
+        free=True if free else None,
+        experience=experience,
+        category=category,
+    )
+
     try:
-        answer = answer_question(question)
+        answer = answer_question(question, overrides=overrides)
     except Exception:
         log.exception("chat: answering %r failed", question[:100])
         return templates.TemplateResponse(

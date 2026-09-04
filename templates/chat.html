@@ -1,50 +1,97 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Ask about events - RateMyCampusEvents</title>
     <link rel="stylesheet" href="/static/style.css">
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
 </head>
 
-<body>
-    <div class="header">
-        <div class="nav">
-            <div class="logo">📅 RateMyCampusEvents</div>
-            <div class="nav-links">
-                <span>Hello, {{ user.name }}</span>
-                <a href="/{% if token %}?token={{ token }}{% endif %}" class="btn">All Events</a>
-                <a href="/logout" class="btn">Logout</a>
-            </div>
+<body class="chat-page">
+    <header class="chat-topbar">
+        <div class="chat-brand">RateMyCampusEvents</div>
+        <div class="chat-topbar-actions">
+            <span class="chat-chips-label">{{ user.name }}</span>
+            <a href="/{% if token %}?token={{ token }}{% endif %}" class="button button-ghost">All events</a>
+            <a href="/logout" class="button button-ghost">Log out</a>
         </div>
-    </div>
+    </header>
 
-    <div class="container">
-        <div class="header-section">
-            <h1>Ask about events</h1>
-            <p class="chat-hint">
-                Try &ldquo;what&rsquo;s on this weekend that isn&rsquo;t a lecture&rdquo;
-                or &ldquo;free things to do next week&rdquo;.
-            </p>
-        </div>
+    <main class="chat-shell">
+        <h1 class="chat-heading">Ask about events</h1>
+        <p class="chat-hint">
+            Try &ldquo;what&rsquo;s on this weekend that isn&rsquo;t a lecture&rdquo;
+            or &ldquo;free things to do next week&rdquo;.
+        </p>
 
-        <div class="chat-card">
-            <form hx-post="/chat{% if token %}?token={{ token }}{% endif %}" hx-target="#chat-reply"
-                hx-swap="innerHTML" hx-disabled-elt="find button">
-                <div class="chat-input-row">
-                    <input type="text" name="question" class="chat-input" autocomplete="off"
-                        placeholder="What's happening on campus?" required>
-                    <button type="submit" class="btn btn-success">Ask</button>
+        {% if demo_date %}
+        <p class="chat-demo-note">
+            <strong>Demo mode.</strong> DEMO_DATE is set, so &ldquo;today&rdquo;
+            is {{ demo_date.strftime('%A %B %d, %Y') }} rather than the real
+            date. Questions about &ldquo;this weekend&rdquo; are answered
+            against that day. Unset DEMO_DATE for the real calendar.
+        </p>
+        {% endif %}
+
+        <!--
+            Answers are appended here, not swapped over the top of each other,
+            so the page reads as a conversation rather than a single result.
+        -->
+        <div id="chat-messages" class="chat-messages"></div>
+
+        <div class="chat-composer">
+            <form id="chat-form" class="card chat-composer-card"
+                hx-post="/chat{% if token %}?token={{ token }}{% endif %}" hx-target="#chat-messages"
+                hx-swap="beforeend" hx-disabled-elt="find button">
+
+                <!--
+                    The chips do not filter the answer after the fact. They are
+                    handed to retrieval as overrides and beat whatever the
+                    model read out of the sentence, so "free" is a fact about
+                    the search rather than a hint to a model.
+                -->
+                <div class="chat-chips">
+                    <span class="chat-chips-label">Filters</span>
+
+                    <label class="chip">
+                        <input type="checkbox" name="free" value="1">
+                        <span>Free</span>
+                    </label>
+
+                    <label class="chip">
+                        <input type="checkbox" name="experience" value="virtual">
+                        <span>Virtual</span>
+                    </label>
+
+                    {% if categories %}
+                    <label class="chip">
+                        <input type="radio" name="category" value="" checked>
+                        <span>Any category</span>
+                    </label>
+                    {% for category in categories %}
+                    <label class="chip">
+                        <input type="radio" name="category" value="{{ category }}">
+                        <span>{{ category }}</span>
+                    </label>
+                    {% endfor %}
+                    {% endif %}
                 </div>
+
+                <div class="chat-input-row">
+                    <input type="text" id="question" name="question" class="input" autocomplete="off"
+                        placeholder="What's happening on campus?" required>
+                    <button type="submit" class="button button-primary">Ask</button>
+                </div>
+
                 <div class="chat-status">
                     <span class="htmx-indicator chat-spinner">Looking through the calendar&hellip;</span>
-                    <span class="chat-quota">{{ used }} of {{ limit }} questions used today</span>
+                    <span>{{ used }} of {{ limit }} questions used today</span>
                 </div>
             </form>
         </div>
-
-        <div id="chat-reply"></div>
-    </div>
+    </main>
 
     <script>
         // htmx does not swap non-2xx responses by default, but /chat answers
@@ -54,6 +101,27 @@
             if ([401, 429, 502].indexOf(event.detail.xhr.status) !== -1) {
                 event.detail.shouldSwap = true;
                 event.detail.isError = false;
+            }
+        });
+
+        // Clear the box only when the question actually got through. A 429 or
+        // a 502 leaves it there to send again -- retyping it is the last thing
+        // you want to do after being told to try again in a minute.
+        document.body.addEventListener('htmx:afterRequest', function (event) {
+            if (event.detail.elt.id !== 'chat-form') return;
+            var status = event.detail.xhr.status;
+            var input = document.getElementById('question');
+            if (status >= 200 && status < 300) {
+                input.value = '';
+            }
+            input.focus();
+        });
+
+        document.body.addEventListener('htmx:afterSwap', function (event) {
+            if (event.target.id !== 'chat-messages') return;
+            var last = event.target.lastElementChild;
+            if (last) {
+                last.scrollIntoView({ block: 'end', behavior: 'smooth' });
             }
         });
     </script>
