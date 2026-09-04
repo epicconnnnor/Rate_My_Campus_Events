@@ -762,6 +762,17 @@ textarea {
     font-size: 13px;
 }
 
+.chat-error-detail {
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.625rem;
+    background: hsl(var(--destructive) / 0.06);
+    border-radius: calc(var(--radius) - 0.25rem);
+    color: hsl(var(--foreground));
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.45;
+}
+
 .chat-error {
     padding: 1rem;
     border-color: hsl(var(--destructive) / 0.5);

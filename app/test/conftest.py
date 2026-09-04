@@ -27,10 +27,25 @@ QUESTIONS_FILE = FIXTURES / "golden_questions.json"
 EVAL_TODAY = date(2026, 9, 2)
 
 
+# Which variable has to be set depends on who is answering. Naming the wrong
+# one is how a secret called GEMINIAPI produced a green tick that had judged
+# nothing; naming none of them would do it again the first time somebody
+# switched provider.
+KEY_FOR_PROVIDER = {
+    "openai": "OPENAI_API_KEY",
+    "gemini": "GEMINI_API_KEY",
+}
+
+
+def _required_key() -> str:
+    """The variable this run needs, or "" if no real model is selected."""
+    provider = os.getenv("RAG_PROVIDER") or "openai"
+    return KEY_FOR_PROVIDER.get(provider, "")
+
+
 def _have_live_model() -> bool:
-    return bool(os.getenv("GEMINI_API_KEY")) and os.getenv(
-        "RAG_PROVIDER", "gemini"
-    ) != "fake"
+    variable = _required_key()
+    return bool(variable) and bool(os.getenv(variable))
 
 
 def _key_is_required() -> bool:
@@ -55,18 +70,19 @@ def live_model():
         return True
 
     if _key_is_required():
+        variable = _required_key() or "an API key"
         pytest.fail(
-            "GEMINI_API_KEY is unset or RAG_PROVIDER=fake, so the judge cannot "
-            "run -- and this is a push or a same-repo pull request, where a key "
-            "is expected. Skipping here would be a green tick certifying "
-            "nothing. Check that the repository secret is named exactly "
-            "GEMINI_API_KEY, matching .github/workflows/eval.yml.",
+            f"{variable} is unset, or RAG_PROVIDER names no real model, so the "
+            "judge cannot run -- and this is a push or a same-repo pull "
+            "request, where a key is expected. Skipping here would be a green "
+            "tick certifying nothing. Check that the repository secret is "
+            f"named exactly {variable}, matching .github/workflows/eval.yml.",
             pytrace=False,
         )
 
     pytest.skip(
-        "no GEMINI_API_KEY: expected on a fork's pull request, which cannot "
-        "read repository secrets"
+        f"no {_required_key() or 'API key'}: expected on a fork's pull "
+        "request, which cannot read repository secrets"
     )
 
 

@@ -15,6 +15,7 @@ from typing import Iterable, List, Optional
 
 from sqlmodel import Session, select
 
+from app.core.config import EMBEDDING_DOCUMENTS_PER_MINUTE
 from app.db.database import engine
 from app.models.event import Event, EventEmbedding
 from app.rag.pacing import Pacer
@@ -30,11 +31,9 @@ MAX_DESCRIPTION_CHARS = 4000
 # How many documents to send per embedding call.
 BATCH_SIZE = 32
 
-# Google's free tier allows 100 embed_content requests per minute, and it
-# counts documents rather than HTTP calls -- one batch of 32 spends 32 of them.
-# This is that published quota, not a number picked for feel. Exceeding it is a
-# hard 429: the first eval run died on document 101 of 102.
-FREE_TIER_DOCUMENTS_PER_MINUTE = 100
+# The per-minute embedding allowance now lives in config, because it is a
+# different number per provider: Google's free tier meters embed_content by
+# document, OpenAI meters by request and token. See EMBEDDING_DPM_BY_PROVIDER.
 
 
 # =============================================================================
@@ -77,13 +76,19 @@ def _needs_embedding(event: Event, existing: Optional[EventEmbedding],
     return existing.content != content
 
 
-def _document_pacer() -> Pacer:
+def _document_pacer(limit: Optional[int] = None) -> Pacer:
     """The backfill's share of the embedding quota.
 
-    Counted in documents rather than calls: the limit is on embed_content
-    requests, and Google counts one per document, so a batch of 32 spends 32.
+    Counted in documents rather than calls, which is exactly how Google meters
+    embed_content -- a batch of 32 spends 32. OpenAI meters by request instead,
+    so counting documents there paces harder than it needs to, deliberately.
+
+    The limit is a parameter so a test can pin a number rather than inherit
+    whichever provider the environment happens to name.
     """
-    return Pacer(FREE_TIER_DOCUMENTS_PER_MINUTE, "documents")
+    if limit is None:
+        limit = EMBEDDING_DOCUMENTS_PER_MINUTE
+    return Pacer(limit, "documents")
 
 
 def _store(session: Session, event: Event, content: str,
@@ -134,10 +139,19 @@ def rebuild_event_doc(event_id: int,
 
 
 def index_events(event_ids: Optional[Iterable[int]] = None,
-                 provider: Optional[EmbeddingProvider] = None) -> Counter:
+                 provider: Optional[EmbeddingProvider] = None,
+                 force: bool = False) -> Counter:
     """Embed whatever is out of date, in batches.
 
     Pass event_ids to limit it; pass nothing to walk the whole table.
+
+    force re-embeds everything regardless of whether the document changed.
+    Needed when the vectors are stale for a reason the row cannot show: the
+    freshness check compares the rendered text and the source timestamp, and
+    neither of those moves when the embedding *model* changes. Switching
+    provider without this leaves the old vectors in place and the table ends up
+    holding two models' idea of the same space, which does not error -- it just
+    returns quietly wrong neighbours.
     """
     stats = Counter()
     provider = provider or get_embedding_provider()
@@ -172,7 +186,7 @@ def index_events(event_ids: Optional[Iterable[int]] = None,
                 )
             ).first()
 
-            if not _needs_embedding(event, existing, content):
+            if not force and not _needs_embedding(event, existing, content):
                 stats["skipped"] += 1
                 continue
 

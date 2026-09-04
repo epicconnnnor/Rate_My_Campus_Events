@@ -20,6 +20,7 @@ from app.core.config import CHAT_DAILY_LIMIT, DEMO_DATE
 from app.db import database as db
 from app.db.database import engine
 from app.rag.answer import answer_question
+from app.rag.providers import ProviderNotConfigured
 from app.rag.retriever import (CAMPUS_TZ, FilterOverrides,
                                 current_campus_date)
 
@@ -36,6 +37,17 @@ OVER_LIMIT = (
 BROKEN = (
     "Something went wrong reaching the assistant. Try again in a minute."
 )
+
+# A misconfiguration is not weather, and telling somebody to try again in a
+# minute is advice that cannot work: it will fail identically forever until a
+# person changes a setting. So the actual reason is shown.
+#
+# What gets shown is the exception's own message, which is written for this --
+# the name of the variable that is missing and what to set it to. No key, no
+# path, no traceback: nothing here is worth hiding, and nothing here is a
+# secret. The generic message stays for everything else, where the reason is
+# genuinely a stack trace nobody outside the log wants.
+MISCONFIGURED_PREFIX = "This install is not configured to answer questions yet."
 
 
 # How many category chips to offer. Enough to be useful, few enough that the
@@ -219,6 +231,21 @@ async def chat(
 
     try:
         answer = answer_question(question, overrides=overrides)
+    except ProviderNotConfigured as error:
+        # Logged as an error rather than an exception: the traceback is six
+        # frames of constructor and the one useful line is the message.
+        log.error("chat: not configured -- %s", error)
+        return templates.TemplateResponse(
+            "fragments/chat_reply.html",
+            {
+                "request": request,
+                "error": MISCONFIGURED_PREFIX,
+                "detail": str(error),
+                "used": used,
+                "limit": CHAT_DAILY_LIMIT,
+            },
+            status_code=503,
+        )
     except Exception:
         log.exception("chat: answering %r failed", question[:100])
         return templates.TemplateResponse(

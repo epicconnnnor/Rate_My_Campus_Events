@@ -5,7 +5,12 @@
 #}
 {% if error %}
 <div class="chat-exchange">
-    <div class="card chat-error">{{ error }}</div>
+    <div class="card chat-error">
+        {{ error }}
+        {# A configuration problem names itself. Everything else stays vague on
+           purpose: the detail is a traceback, and the log is where it lives. #}
+        {% if detail %}<div class="chat-error-detail">{{ detail }}</div>{% endif %}
+    </div>
 </div>
 {% else %}
 <div class="chat-exchange">

@@ -29,8 +29,25 @@ from app.core.config import (
     EMBEDDING_DIMENSIONS,
     EMBEDDING_MODEL,
     GEMINI_API_KEY,
+    OPENAI_API_KEY,
     RAG_PROVIDER,
 )
+
+
+class ProviderNotConfigured(RuntimeError):
+    """The provider cannot be built from the settings it was given.
+
+    Kept apart from everything that can go wrong while talking to a model,
+    because the two want opposite handling. A 503 is weather: say something
+    calm and retry. A missing key is answerable by whoever is running the app,
+    and only by them, so the message is written to be repeated out loud rather
+    than swallowed.
+
+    Six identical "something went wrong reaching the assistant" pages, all of
+    them a RuntimeError raised in a constructor before any request was made, is
+    what this class is for.
+    """
+
 
 
 class EmbeddingProvider(Protocol):
@@ -105,6 +122,8 @@ def announce_models() -> None:
 # cases pacing cannot see -- another job on the same project, a per-model limit
 # we are not tracking -- so the numbers are small on purpose. The SDK's own
 # retry gives up against a sustained quota refusal, hence our own.
+_SDK_ERRORS = None
+
 QUOTA_RETRY_ATTEMPTS = 4
 QUOTA_FALLBACK_DELAY_SECONDS = 20
 
@@ -140,10 +159,67 @@ _RETRY_DELAY = re.compile(r"retry[_-]?delay['\"]?\s*[:=]\s*['\"]?([0-9.]+)s",
                           re.IGNORECASE)
 
 
+def _sdk_error_types() -> tuple:
+    """The SDK exception types we know how to wait out.
+
+    Gathered from whichever SDKs are actually installed, so the retry wrapper
+    is not tied to one vendor and an uninstalled SDK is not an import error.
+    An empty tuple is a valid `except`: it catches nothing, which is the right
+    answer when neither SDK is present.
+    """
+    global _SDK_ERRORS
+    if _SDK_ERRORS is not None:
+        return _SDK_ERRORS
+
+    found = []
+    try:
+        from google.genai import errors as genai_errors
+        found.append(genai_errors.APIError)
+    except ImportError:
+        pass
+    try:
+        import openai
+        found.append(openai.APIError)
+    except ImportError:
+        pass
+
+    _SDK_ERRORS = tuple(found)
+    return _SDK_ERRORS
+
+
+def _status_code(error) -> Optional[int]:
+    """The HTTP status behind an SDK error, whichever SDK raised it.
+
+    google-genai puts an int on `.code`. openai puts an int on `.status_code`
+    and uses `.code` for a string slug like "rate_limit_exceeded", so
+    status_code is checked first and a non-numeric code is ignored rather than
+    compared against 429 and quietly losing.
+    """
+    for attribute in ("status_code", "code"):
+        value = getattr(error, attribute, None)
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str) and value.isdigit():
+            return int(value)
+    return None
+
+
+def _is_connection_error(error) -> bool:
+    """Never reached the far end at all. Worth the same patience as a 5xx."""
+    try:
+        import openai
+    except ImportError:
+        return False
+    return isinstance(error, openai.APIConnectionError)
+
+
 def _is_quota_error(error) -> bool:
-    if getattr(error, "code", None) == 429:
+    if _status_code(error) == 429:
         return True
-    return "RESOURCE_EXHAUSTED" in str(error)
+    text = str(error)
+    return "RESOURCE_EXHAUSTED" in text or "rate_limit" in text.lower()
 
 
 def _quota_ids(error) -> List[str]:
@@ -178,8 +254,10 @@ def _is_daily_quota(error) -> bool:
 
 def _is_server_error(error) -> bool:
     """Busy or broken at the far end, rather than anything about our request."""
-    code = getattr(error, "code", None)
-    if isinstance(code, int) and 500 <= code < 600:
+    code = _status_code(error)
+    if code is not None and 500 <= code < 600:
+        return True
+    if _is_connection_error(error):
         return True
     return any(
         status in str(error)
@@ -205,8 +283,40 @@ def _retry_after(error) -> Optional[float]:
                 if match:
                     return float(match.group(1))
 
+    # openai puts it in a response header instead of the body.
+    response = getattr(error, "response", None)
+    headers = getattr(response, "headers", None)
+    if headers is not None:
+        for name in ("retry-after", "x-ratelimit-reset-requests"):
+            try:
+                raw = headers.get(name)
+            except AttributeError:
+                raw = None
+            if raw:
+                seconds = _seconds_from_header(str(raw))
+                if seconds is not None:
+                    return seconds
+
     match = _RETRY_DELAY.search(str(error))
     return float(match.group(1)) if match else None
+
+
+def _seconds_from_header(raw: str) -> Optional[float]:
+    """A retry-after that may be seconds, or may be "1.5s" / "300ms".
+
+    Whole HTTP-date forms are not handled: nothing we talk to sends one, and
+    guessing wrong here means waiting until tomorrow.
+    """
+    raw = raw.strip()
+    try:
+        return float(raw)
+    except ValueError:
+        pass
+    match = re.fullmatch(r"([0-9.]+)\s*(ms|s|m)", raw, re.IGNORECASE)
+    if not match:
+        return None
+    value, unit = float(match.group(1)), match.group(2).lower()
+    return {"ms": value / 1000, "s": value, "m": value * 60}[unit]
 
 
 def _quota_delay(error, attempt: int) -> float:
@@ -236,7 +346,7 @@ def _with_retries(call: Callable):
     a flapping 503 cannot spend the patience reserved for a 429. Anything else
     -- a bad model id, a malformed request -- is a real failure and raises.
     """
-    from google.genai import errors
+    retryable = _sdk_error_types()
 
     quota_attempt = 0
     server_attempt = 0
@@ -244,7 +354,7 @@ def _with_retries(call: Callable):
     while True:
         try:
             return call()
-        except errors.APIError as error:
+        except retryable as error:
             if _is_quota_error(error) and _is_daily_quota(error):
                 log.error(
                     "daily quota exhausted (%s) -- not retrying, it does not "
@@ -322,8 +432,10 @@ class GeminiEmbeddingProvider:
         from google import genai
 
         if not GEMINI_API_KEY:
-            raise RuntimeError(
-                "GEMINI_API_KEY is not set; export it or set RAG_PROVIDER=fake"
+            raise ProviderNotConfigured(
+                "GEMINI_API_KEY is not set. Export it, or set "
+                "RAG_PROVIDER=openai with an OPENAI_API_KEY, or "
+                "RAG_PROVIDER=fake for stub vectors."
             )
         self._client = genai.Client(api_key=GEMINI_API_KEY)
         self._model = EMBEDDING_MODEL
@@ -356,8 +468,10 @@ class GeminiChatProvider:
         from google import genai
 
         if not GEMINI_API_KEY:
-            raise RuntimeError(
-                "GEMINI_API_KEY is not set; export it or set RAG_PROVIDER=fake"
+            raise ProviderNotConfigured(
+                "GEMINI_API_KEY is not set. Export it, or set "
+                "RAG_PROVIDER=openai with an OPENAI_API_KEY, or "
+                "RAG_PROVIDER=fake for stub vectors."
             )
         self._client = genai.Client(api_key=GEMINI_API_KEY)
         self._model = model or CHAT_MODEL
@@ -373,6 +487,83 @@ class GeminiChatProvider:
             contents=prompt,
         ))
         return response.text
+
+
+
+# =============================================================================
+# OPENAI
+# =============================================================================
+
+
+class OpenAIEmbeddingProvider:
+    def __init__(self) -> None:
+        # Imported lazily so the app runs without the SDK until something
+        # actually embeds.
+        from openai import OpenAI
+
+        if not OPENAI_API_KEY:
+            raise ProviderNotConfigured(
+                "OPENAI_API_KEY is not set. Export it, or set "
+                "RAG_PROVIDER=gemini with a GEMINI_API_KEY, or "
+                "RAG_PROVIDER=fake for stub vectors."
+            )
+        self._client = OpenAI(api_key=OPENAI_API_KEY)
+        self._model = EMBEDDING_MODEL
+
+    def _embed(self, texts: List[str]) -> List[List[float]]:
+        response = _with_retries(lambda: self._client.embeddings.create(
+            model=self._model,
+            input=texts,
+            # text-embedding-3-small is 1536 wide already, so this asks for
+            # what it would return anyway. Said out loud because the column is
+            # vector(1536) and a default that ever moved would be a migration,
+            # not a surprise.
+            dimensions=EMBEDDING_DIMENSIONS,
+        ))
+        # Documented to come back in order, and each item also carries its
+        # index. Sorting on what is actually there beats trusting the sentence.
+        ordered = sorted(response.data, key=lambda item: item.index)
+        return [_normalize(item.embedding) for item in ordered]
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        return self._embed(texts)
+
+    def embed_query(self, text: str) -> List[float]:
+        # OpenAI has no equivalent of Gemini's task_type: a document and a
+        # question are embedded the same way. The disk cache still files the
+        # two separately, so identical text asked both ways is stored twice --
+        # a wasted entry, never a wrong vector, and not worth special-casing.
+        return self._embed([text])[0]
+
+    def chargeable(self, texts: List[str]) -> int:
+        return len(texts)
+
+
+class OpenAIChatProvider:
+    def __init__(self, model: Optional[str] = None) -> None:
+        from openai import OpenAI
+
+        if not OPENAI_API_KEY:
+            raise ProviderNotConfigured(
+                "OPENAI_API_KEY is not set. Export it, or set "
+                "RAG_PROVIDER=gemini with a GEMINI_API_KEY, or "
+                "RAG_PROVIDER=fake for canned replies."
+            )
+        self._client = OpenAI(api_key=OPENAI_API_KEY)
+        self._model = model or CHAT_MODEL
+
+    def complete(self, prompt: str) -> str:
+        # Before the call, not after the refusal -- same reasoning as Gemini.
+        chat_pacer(self._model).reserve(1)
+
+        response = _with_retries(lambda: self._client.chat.completions.create(
+            model=self._model,
+            messages=[{"role": "user", "content": prompt}],
+        ))
+        # A refusal or a length stop can leave content empty. Returning "" lets
+        # parse_json_object log a bad extraction and fall back to a broad
+        # search, which is what it already does for any other unusable reply.
+        return response.choices[0].message.content or ""
 
 
 # =============================================================================
@@ -420,11 +611,13 @@ class FakeChatProvider:
 # =============================================================================
 
 _EMBEDDING_PROVIDERS = {
+    "openai": OpenAIEmbeddingProvider,
     "gemini": GeminiEmbeddingProvider,
     "fake": FakeEmbeddingProvider,
 }
 
 _CHAT_PROVIDERS = {
+    "openai": OpenAIChatProvider,
     "gemini": GeminiChatProvider,
     "fake": FakeChatProvider,
 }
@@ -435,8 +628,9 @@ def _build(registry: dict, name: str, **kwargs):
     try:
         return registry[name](**kwargs)
     except KeyError:
-        raise ValueError(
-            f"unknown RAG_PROVIDER {name!r}; expected one of {sorted(registry)}"
+        raise ProviderNotConfigured(
+            f"RAG_PROVIDER is {name!r}, which is not a provider. "
+            f"Expected one of {sorted(registry)}."
         ) from None
 
 
