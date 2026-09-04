@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   pull_request:
+  # 08:00 UTC is 04:00 Eastern, and an hour past the Pacific midnight the free
+  # tier's daily quotas roll over on. The judged job gets a full day's budget
+  # and the verdict is waiting by morning.
+  schedule:
+    - cron: "0 8 * * *"
   workflow_dispatch:
 
 jobs:
@@ -27,11 +32,25 @@ jobs:
   hallucinations:
     runs-on: ubuntu-latest
 
-    # The default is 360 minutes, which is not a limit so much as an afternoon.
-    # This job waits on purpose -- a quota window is a minute, and a busy model
-    # is now worth up to eight minutes of backoff per call -- so a bad day adds
-    # up honestly rather than hanging. 45 is well clear of a normal run, which
-    # is about twelve, and still fails the same day.
+    # Nightly, or when somebody asks for it. Not on a commit.
+    #
+    # It spends a shared daily quota and waits on a model that is sometimes
+    # busy, so a green tick here is a statement about Google's afternoon as
+    # much as about the diff. Fifteen minutes and a slice of a 500-a-day budget
+    # is the wrong toll to charge every push, and a judge that fails for
+    # capacity teaches people to ignore a red tick -- which costs more than
+    # running it less often.
+    #
+    # The unit job above still runs on every push and pull request. That is the
+    # one that gates a change.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+
+    # And once it does start, an end. The default is 360 minutes, which is not
+    # a limit so much as an afternoon. This job waits on purpose -- a quota
+    # window is a minute, and a busy model is worth up to eight minutes of
+    # backoff per call -- so a bad day adds up honestly rather than hanging.
+    # 45 is well clear of a normal run, which is about twelve, and still fails
+    # the same night.
     timeout-minutes: 45
 
     services:
@@ -65,6 +84,11 @@ jobs:
       # Only a fork's pull request is allowed to skip: it cannot read the
       # repository's secrets. A push or a same-repo pull request that finds
       # no key fails, rather than going green having judged nothing.
+      #
+      # This job no longer runs on pull_request at all, so the expression is
+      # true every time it is evaluated. Kept rather than folded to `true` so
+      # that putting the trigger back does not silently hand forks a green
+      # tick for having judged nothing.
       EVAL_REQUIRE_LIVE_MODEL: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
 
     steps:
