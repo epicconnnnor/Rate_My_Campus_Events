@@ -110,12 +110,26 @@ QUOTA_FALLBACK_DELAY_SECONDS = 20
 
 # A 5xx is a different animal: the request was fine and the far end is simply
 # busy. It carries no retryDelay, only "try again later", so the only sensible
-# answer is to back off and keep asking. 6 attempts of 2s doubling, capped, is
-# about a minute of patience -- long enough to ride out a demand spike, short
-# enough that a real outage still fails the run.
-SERVER_RETRY_ATTEMPTS = 6
+# answer is to back off and keep asking.
+#
+# 10 attempts of 2s doubling, capped at 120, is about eight minutes of patience
+# per call. It was one minute across 6 attempts, and one minute was not enough:
+# the eval kept dying partway through the nine golden questions on 503
+# UNAVAILABLE while the pipeline itself was fine -- the scuba question, which
+# runs the same path end to end, passed in the same run.
+#
+# Eight minutes is a real cost and it is spent per call, not per run, so a
+# genuine outage now fails the job about eight minutes after the first question
+# that cannot get through rather than one. That is the trade: CI time against
+# throwing a run away for a spike that was over in ninety seconds.
+#
+# The cap only starts mattering here. At 6 attempts the doubling never reached
+# 32, so 60 was never a ceiling anything touched; at 10 it binds from the
+# seventh attempt on, which is what stops the last few from being 4 and 8
+# minutes of dead air.
+SERVER_RETRY_ATTEMPTS = 10
 SERVER_BACKOFF_BASE_SECONDS = 2
-SERVER_BACKOFF_CAP_SECONDS = 60
+SERVER_BACKOFF_CAP_SECONDS = 120
 
 # e.g. "quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
 _QUOTA_ID = re.compile(r"quotaId['\"]?\s*[:=]\s*['\"]([^'\"]+)['\"]",

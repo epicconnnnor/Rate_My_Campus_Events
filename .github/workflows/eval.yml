@@ -27,6 +27,13 @@ jobs:
   hallucinations:
     runs-on: ubuntu-latest
 
+    # The default is 360 minutes, which is not a limit so much as an afternoon.
+    # This job waits on purpose -- a quota window is a minute, and a busy model
+    # is now worth up to eight minutes of backoff per call -- so a bad day adds
+    # up honestly rather than hanging. 45 is well clear of a normal run, which
+    # is about twelve, and still fails the same day.
+    timeout-minutes: 45
+
     services:
       postgres:
         # Not the stock postgres image -- the schema needs the vector extension.
