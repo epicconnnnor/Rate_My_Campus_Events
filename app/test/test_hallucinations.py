@@ -48,6 +48,14 @@ Reply with one JSON object and nothing else:
 
 
 def _context(matches):
+    """The whole world of facts the judge is allowed to mark the answer against.
+
+    Times go through the same formatter the answer was written from. Printing
+    the stored value here instead is what made the judge fail six of nine
+    questions for inventing times that were only ever a timezone apart.
+    """
+    from app.rag.retriever import format_event_time
+
     if not matches:
         return "(nothing was retrieved)"
     lines = []
@@ -55,7 +63,7 @@ def _context(matches):
         event = match.event
         lines.append(
             f"- {event.get('title')}\n"
-            f"    starts: {event.get('starts_at')}\n"
+            f"    starts: {format_event_time(event.get('starts_at'))}\n"
             f"    location: {event.get('location')}\n"
             f"    organizers: {event.get('groups')}\n"
             f"    type: {event.get('event_types')}\n"

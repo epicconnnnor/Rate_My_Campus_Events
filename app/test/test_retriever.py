@@ -7,7 +7,7 @@ fallback ladder can be walked one rung at a time.
 """
 
 import json
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -21,7 +21,9 @@ from app.rag.retriever import (
     Match,
     QueryFilters,
     build_extraction_prompt,
+    describe_match,
     extract_filters,
+    format_event_time,
     retrieve,
 )
 
@@ -337,3 +339,48 @@ def test_free_and_experience_are_carried_into_every_rung():
     for call in search.calls:
         assert call["filters"].free is True
         assert call["filters"].experience == "inperson"
+
+
+# =============================================================================
+# HOW A TIME IS WRITTEN
+# =============================================================================
+
+# Stored times are UTC. Campus is four hours behind in September, so an event
+# stored at 20:00 is a 4pm event and must read as one everywhere.
+STORED_UTC = datetime(2026, 9, 5, 20, 0, tzinfo=timezone.utc)
+AS_WRITTEN = "Saturday September 05, 04:00 PM"
+
+
+def test_a_stored_time_is_written_in_campus_time():
+    assert format_event_time(STORED_UTC) == AS_WRITTEN
+
+
+def test_an_event_with_no_start_says_so_rather_than_guessing():
+    assert format_event_time(None) == "date unknown"
+
+
+def test_the_answer_and_the_judge_are_shown_the_same_time():
+    """The one that matters.
+
+    The eval marks an answer against a context built separately from the same
+    events. While the two rendered times differently -- the answer in campus
+    time, the judge from the stored UTC value -- the judge read a correct 4:00 PM
+    as a four-hour invention and failed six of nine golden questions for it.
+
+    Both sides go through format_event_time now, so this holds by construction.
+    It is asserted anyway: the failure was silent, cost a day of quota to see,
+    and looked exactly like a hallucinating model.
+    """
+    from app.test.test_hallucinations import _context
+
+    match = Match(fake_event(starts_at=STORED_UTC), distance=0.1)
+
+    answer_side = describe_match(match)
+    judge_side = _context([match])
+
+    assert AS_WRITTEN in answer_side
+    assert AS_WRITTEN in judge_side
+
+    # And neither of them leaks the stored value it was rendered from.
+    assert "20:00" not in answer_side
+    assert "20:00" not in judge_side
