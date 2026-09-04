@@ -283,10 +283,27 @@ invent an event, a date, or a detail that is not written above.
 """
 
 
+def format_event_time(starts_at: Optional[datetime]) -> str:
+    """How an event's time is written wherever a model is going to read it.
+
+    Everything that renders an event for a model calls this, rather than each
+    caller converting for itself. The eval sets two renderings of the same event
+    against each other -- the answer is written from describe_match, and the
+    judge marks it against the context the eval builds -- so the moment the two
+    drift they are no longer talking about the same event.
+
+    They did drift. The judge was handed the stored value, which is UTC, while
+    the answer had been converted to campus time, so a correct 4:00 PM read as a
+    four-hour invention and six of nine golden questions failed on it.
+    """
+    if not starts_at:
+        return "date unknown"
+    return starts_at.astimezone(CAMPUS_TZ).strftime("%A %B %d, %I:%M %p")
+
+
 def describe_match(match: Match) -> str:
     event = match.event
-    when = event.get("starts_at")
-    when = when.astimezone(CAMPUS_TZ).strftime("%A %B %d, %I:%M %p") if when else "date unknown"
+    when = format_event_time(event.get("starts_at"))
     where = event.get("location") or "location unknown"
     return f"- {event.get('title')} ({when}, {where})"
 
