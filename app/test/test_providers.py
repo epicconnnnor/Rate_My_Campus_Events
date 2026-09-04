@@ -57,8 +57,8 @@ def test_the_defaults_are_the_lite_models(monkeypatch):
     config, _ = reload_with(
         monkeypatch, CHAT_MODEL=None, JUDGE_MODEL=None, EMBEDDING_MODEL=None
     )
-    assert config.CHAT_MODEL == "gemini-3.5-flash-lite"
-    assert config.JUDGE_MODEL == "gemini-3.1-flash-lite"
+    assert config.CHAT_MODEL == "gemini-3.1-flash-lite"
+    assert config.JUDGE_MODEL == "gemini-3.5-flash-lite"
     assert config.EMBEDDING_MODEL == "gemini-embedding-001"
 
 
@@ -67,7 +67,7 @@ def test_an_unset_judge_model_keeps_its_own_default(monkeypatch):
     quota bucket, and the judge back on its own writing, the moment the
     variable went missing -- silently, which is the worst way to lose it."""
     config, _ = reload_with(monkeypatch, CHAT_MODEL="model-a", JUDGE_MODEL=None)
-    assert config.JUDGE_MODEL == "gemini-3.1-flash-lite"
+    assert config.JUDGE_MODEL == "gemini-3.5-flash-lite"
     assert config.JUDGE_MODEL != config.CHAT_MODEL
 
 
@@ -77,8 +77,8 @@ def test_an_empty_setting_is_treated_as_unset(monkeypatch):
     config, _ = reload_with(
         monkeypatch, CHAT_MODEL="", JUDGE_MODEL="", EMBEDDING_MODEL=""
     )
-    assert config.CHAT_MODEL == "gemini-3.5-flash-lite"
-    assert config.JUDGE_MODEL == "gemini-3.1-flash-lite"
+    assert config.CHAT_MODEL == "gemini-3.1-flash-lite"
+    assert config.JUDGE_MODEL == "gemini-3.5-flash-lite"
     assert config.EMBEDDING_MODEL == "gemini-embedding-001"
 
 

@@ -85,7 +85,14 @@ EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL") or "gemini-embedding-001"
 # them -- allows 20 requests per day, and one eval run spends about 20 on its
 # own, so a single run was the whole day's budget. The lite models allow 500 a
 # day at 15 a minute, which is room to actually iterate.
-CHAT_MODEL = os.getenv("CHAT_MODEL") or "gemini-3.5-flash-lite"
+#
+# Which of the two lite ids sits here is a load decision, and the pair swapped
+# once. Answering is the heavier caller -- two calls a question, one to read it
+# and one to write the answer, against the judge's one -- so it belongs on
+# whichever model is quieter. 3.5-flash-lite was running at 14 of its 15 a
+# minute while 3.1 sat at 6, and the eval was dying partway through the nine
+# questions on 503 UNAVAILABLE, so the heavy side moved here.
+CHAT_MODEL = os.getenv("CHAT_MODEL") or "gemini-3.1-flash-lite"
 
 # The model the eval's judge reads with. Deliberately its own setting, and its
 # own default, for two reasons.
@@ -101,7 +108,10 @@ CHAT_MODEL = os.getenv("CHAT_MODEL") or "gemini-3.5-flash-lite"
 # second model was chosen, and quietly collapsing the split back into one
 # bucket is the exact failure it was meant to avoid. Setting the two equal by
 # hand is still allowed, and announce_models says so out loud.
-JUDGE_MODEL = os.getenv("JUDGE_MODEL") or "gemini-3.1-flash-lite"
+#
+# It holds the busier of the two lite ids because it is the lighter caller: one
+# request per question, where answering costs two. See CHAT_MODEL.
+JUDGE_MODEL = os.getenv("JUDGE_MODEL") or "gemini-3.5-flash-lite"
 
 # Baked into the vector column type by migration 0004. Changing it is a schema
 # change plus a full re-index, not a config tweak -- keep the two in step.
@@ -131,11 +141,22 @@ RETRIEVAL_MAX_DISTANCE = float(os.getenv("RETRIEVAL_MAX_DISTANCE", "0.6"))
 # models allow 15. The non-lite ones allow 5, so this belongs with CHAT_MODEL:
 # moving off Lite means moving this too.
 #
+# Set below the published ceiling rather than at it. Pacing to exactly 15 meant
+# arriving at 14 and 15 of 15 every minute, with nothing left for what this
+# pacer cannot see -- another job on the same project, a local run, a clock a
+# little behind the server's. Three requests of slack is cheap: the eval's
+# burst is 18 calls, which sits out one window at 12 a minute exactly as it did
+# at 15.
+#
+# It is not a fix for the 503s. Those are capacity at the far end rather than
+# our quota, and _with_retries is what rides them out; this only stops us
+# adding to the crowd at the ceiling.
+#
 # Per model matters. Chat and judge are different models and so different
 # buckets, and one eval question costs two chat calls -- one to read the
 # question, one to write the answer -- which arrive as fast as the network
 # allows.
-CHAT_REQUESTS_PER_MINUTE = int(os.getenv("CHAT_REQUESTS_PER_MINUTE") or "15")
+CHAT_REQUESTS_PER_MINUTE = int(os.getenv("CHAT_REQUESTS_PER_MINUTE") or "12")
 
 # How many chat questions one user may ask per calendar day, campus time.
 CHAT_DAILY_LIMIT = int(os.getenv("CHAT_DAILY_LIMIT", "20"))
