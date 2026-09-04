@@ -74,27 +74,34 @@ RAG_PROVIDER = os.getenv("RAG_PROVIDER", "gemini")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "gemini-embedding-001")
+# Every one of these is read as "or", not as a getenv default: an unset CI
+# variable arrives as an empty string rather than as absent, and os.getenv's
+# default does not catch that. Asking for a model called "" is a 404 three
+# layers down.
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL") or "gemini-embedding-001"
 
-# gemini-2.5-flash is closed to new API keys -- it answers a fresh key with
-# 404 NOT_FOUND rather than a deprecation notice, so it reads as a broken
-# model id instead of a retired one.
-CHAT_MODEL = os.getenv("CHAT_MODEL", "gemini-3.6-flash")
+# Both generation models are Flash-Lite, and that is a quota decision rather
+# than a quality one. On the free tier every non-lite flash model -- 3.6 among
+# them -- allows 20 requests per day, and one eval run spends about 20 on its
+# own, so a single run was the whole day's budget. The lite models allow 500 a
+# day at 15 a minute, which is room to actually iterate.
+CHAT_MODEL = os.getenv("CHAT_MODEL") or "gemini-3.5-flash-lite"
 
-# The model the eval's judge reads with. Deliberately its own setting rather
-# than reusing CHAT_MODEL, for two reasons.
+# The model the eval's judge reads with. Deliberately its own setting, and its
+# own default, for two reasons.
 #
-# Quotas are per project per model, so putting the judge on a different model
-# gives it a separate daily allowance -- the eval needs about 20 generation
-# calls and the free tier allows 20 per model per day, which one model cannot
-# cover on its own.
+# Quotas are per project per model, so a different model is a different daily
+# allowance: the judge cannot be starved by a day of chat, and chat cannot be
+# starved by a day of evals.
 #
 # It is also the right shape: a judge checking an answer for invented detail
 # should not be the same model that wrote it.
 #
-# Leaving this equal to CHAT_MODEL defeats both purposes -- same bucket, same
-# reader -- so point it at a different flash model.
-JUDGE_MODEL = os.getenv("JUDGE_MODEL") or CHAT_MODEL
+# It no longer falls back to CHAT_MODEL. That fallback existed only until a
+# second model was chosen, and quietly collapsing the split back into one
+# bucket is the exact failure it was meant to avoid. Setting the two equal by
+# hand is still allowed, and announce_models says so out loud.
+JUDGE_MODEL = os.getenv("JUDGE_MODEL") or "gemini-3.1-flash-lite"
 
 # Baked into the vector column type by migration 0004. Changing it is a schema
 # change plus a full re-index, not a config tweak -- keep the two in step.
