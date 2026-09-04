@@ -10,9 +10,14 @@ Nothing here sleeps for real: the clock is a fake so a minute costs nothing.
 
 import pytest
 
-from app.core.config import CHAT_REQUESTS_PER_MINUTE
+from app.core.config import (CHAT_REQUESTS_PER_MINUTE, CHAT_RPM_BY_PROVIDER,
+                             EMBEDDING_DPM_BY_PROVIDER)
 from app.rag import pacing
-from app.rag.indexer import FREE_TIER_DOCUMENTS_PER_MINUTE, _document_pacer
+from app.rag.indexer import _document_pacer
+
+# The document tests pin Google's number rather than inheriting whichever
+# provider the environment names, so they mean the same thing on any machine.
+GEMINI_DOCUMENTS_PER_MINUTE = EMBEDDING_DPM_BY_PROVIDER["gemini"]
 from app.rag.pacing import Pacer
 from app.rag.providers import (SERVER_BACKOFF_BASE_SECONDS,
                                SERVER_BACKOFF_CAP_SECONDS,
@@ -50,23 +55,43 @@ def clock(monkeypatch):
 
 
 def test_the_document_limit_is_googles_number_not_ours():
-    assert FREE_TIER_DOCUMENTS_PER_MINUTE == 100
+    """100 embed_content requests a minute on the free tier, metered per
+    document. Not a number picked for feel: exceeding it is a hard 429, and
+    the first eval run died on document 101 of 102."""
+    assert GEMINI_DOCUMENTS_PER_MINUTE == 100
 
 
-def test_chat_paces_under_the_published_ceiling():
-    """The Flash-Lite models publish 15 a minute, and the chat pacer is the one
-    limit here that is deliberately not the published number. Pacing to exactly
-    15 meant arriving at 14 and 15 of 15 every minute, leaving nothing for what
-    a single process cannot see: another job on the same project, a local run,
-    a clock behind the server's."""
-    assert CHAT_REQUESTS_PER_MINUTE == 12
-    # The non-lite models are 5, which is why this still moves with CHAT_MODEL
-    # rather than standing on its own.
-    assert CHAT_REQUESTS_PER_MINUTE < 15
+def test_gemini_paces_under_its_published_ceiling():
+    """The Flash-Lite models publish 15 a minute, and this is deliberately not
+    that number. Pacing to exactly 15 meant arriving at 14 and 15 of 15 every
+    minute, leaving nothing for what a single process cannot see: another job
+    on the same key, a local run, a clock behind the server's."""
+    assert CHAT_RPM_BY_PROVIDER["gemini"] == 12
+    assert CHAT_RPM_BY_PROVIDER["gemini"] < 15
+
+
+def test_openai_paces_higher_but_still_paces():
+    """OpenAI's limits are not the binding constraint -- gpt-4o-mini allows
+    hundreds a minute on the smallest paid tier. This is a brake on a runaway
+    loop spending real money, not a quota dodge, so it stays a real number."""
+    assert CHAT_RPM_BY_PROVIDER["openai"] == 60
+    assert CHAT_RPM_BY_PROVIDER["openai"] > CHAT_RPM_BY_PROVIDER["gemini"]
+
+
+def test_every_real_provider_has_both_limits():
+    """A provider added to one map and not the other silently falls back to
+    Gemini's numbers, which would pace an OpenAI run into the ground."""
+    for provider in ("openai", "gemini", "fake"):
+        assert CHAT_RPM_BY_PROVIDER[provider] > 0
+        assert EMBEDDING_DPM_BY_PROVIDER[provider] > 0
+
+
+def test_the_resolved_limit_is_one_of_them():
+    assert CHAT_REQUESTS_PER_MINUTE in CHAT_RPM_BY_PROVIDER.values()
 
 
 def test_staying_under_the_limit_never_waits(clock):
-    pacer = _document_pacer()
+    pacer = _document_pacer(GEMINI_DOCUMENTS_PER_MINUTE)
     for _ in range(3):
         pacer.reserve(32)
     assert clock.slept == []
@@ -76,21 +101,21 @@ def test_a_cached_batch_costs_nothing(clock):
     """The indexer reserves what will actually be sent, not what it was asked
     for. A run answered entirely from the embedding cache used to reach 102
     documents and sit out a quota window for requests nobody was making."""
-    pacer = _document_pacer()
+    pacer = _document_pacer(GEMINI_DOCUMENTS_PER_MINUTE)
     for _ in range(10):
         pacer.reserve(0)
     assert clock.slept == []
 
     # And the window is still untouched, so real work after it is not paced
     # against documents that were never sent.
-    pacer.reserve(FREE_TIER_DOCUMENTS_PER_MINUTE)
+    pacer.reserve(GEMINI_DOCUMENTS_PER_MINUTE)
     assert clock.slept == []
 
 
 def test_crossing_the_limit_waits_out_the_minute(clock):
     """96 documents through, then a batch that would make 102 -- which is
     exactly what killed the first eval run."""
-    pacer = _document_pacer()
+    pacer = _document_pacer(GEMINI_DOCUMENTS_PER_MINUTE)
     for _ in range(3):
         pacer.reserve(32)
     pacer.reserve(6)
@@ -101,7 +126,7 @@ def test_crossing_the_limit_waits_out_the_minute(clock):
 
 
 def test_the_window_resets_after_the_wait(clock):
-    pacer = _document_pacer()
+    pacer = _document_pacer(GEMINI_DOCUMENTS_PER_MINUTE)
     for _ in range(3):
         pacer.reserve(32)
     pacer.reserve(6)
@@ -115,7 +140,7 @@ def test_the_window_resets_after_the_wait(clock):
 
 
 def test_a_minute_passing_on_its_own_resets_the_window(clock):
-    pacer = _document_pacer()
+    pacer = _document_pacer(GEMINI_DOCUMENTS_PER_MINUTE)
     for _ in range(3):
         pacer.reserve(32)
 
@@ -125,7 +150,7 @@ def test_a_minute_passing_on_its_own_resets_the_window(clock):
 
 
 def test_only_the_overflowing_batch_waits(clock):
-    pacer = _document_pacer()
+    pacer = _document_pacer(GEMINI_DOCUMENTS_PER_MINUTE)
     for _ in range(6):
         pacer.reserve(32)
     # 192 documents is two windows' worth, so exactly one wait.
@@ -164,15 +189,23 @@ def test_chat_stays_under_its_limit_a_minute(clock):
     assert clock.slept[0] >= 60
 
 
-def test_an_eval_run_of_two_calls_a_question_waits_once(clock):
+def test_an_eval_run_of_two_calls_a_question_waits_once_on_gemini(clock):
     """Nine golden questions, two chat calls each -- reading the question and
-    writing the answer -- is 18 in a burst against a limit of 12. Still one
-    waited window, the same as it cost at 15: dropping the ceiling bought the
-    headroom without buying another minute of CI."""
-    pacer = Pacer(CHAT_REQUESTS_PER_MINUTE, "requests")
+    writing the answer -- is 18 in a burst against Gemini's limit of 12. One
+    waited window, the same as it cost at 15."""
+    pacer = Pacer(CHAT_RPM_BY_PROVIDER["gemini"], "requests")
     for _ in range(18):
         pacer.reserve(1)
     assert len(clock.slept) == 1
+
+
+def test_the_same_eval_run_never_waits_on_openai(clock):
+    """Which is the point of the retune: the pacer stops being the thing the
+    eval is waiting on, without stopping being a pacer."""
+    pacer = Pacer(CHAT_RPM_BY_PROVIDER["openai"], "requests")
+    for _ in range(18):
+        pacer.reserve(1)
+    assert clock.slept == []
 
 
 # =============================================================================

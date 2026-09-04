@@ -1,10 +1,11 @@
 """
 Tests for which model each job talks to.
 
-Two things have to hold. The models are the Flash-Lite ids, which are the ones
-with 500 free requests a day rather than 20. And chat and judge are different
-models, so they draw on separate daily allowances and the judge is not marking
-its own writing. These check that both are real and not merely configured.
+Two things have to hold, on every provider. The default ids belong to the
+provider that is selected -- a Gemini id means nothing to OpenAI and the other
+way round. And chat and judge are different models, so the judge is never
+marking its own writing, and on Gemini they draw on separate daily allowances
+as well. These check that both are real and not merely configured.
 """
 
 import importlib
@@ -50,23 +51,62 @@ def test_the_judge_gets_its_own_model_when_one_is_set(monkeypatch):
     assert config.JUDGE_MODEL == "model-b"
 
 
-def test_the_defaults_are_the_lite_models(monkeypatch):
+def defaults_for(monkeypatch, provider):
+    return reload_with(monkeypatch, RAG_PROVIDER=provider, CHAT_MODEL=None,
+                       JUDGE_MODEL=None, EMBEDDING_MODEL=None)[0]
+
+
+def test_the_openai_defaults_are_openai_ids(monkeypatch):
+    config = defaults_for(monkeypatch, "openai")
+    assert config.CHAT_MODEL == "gpt-4o-mini"
+    assert config.JUDGE_MODEL == "gpt-4.1-mini"
+    assert config.EMBEDDING_MODEL == "text-embedding-3-small"
+
+
+def test_the_gemini_defaults_are_the_lite_models(monkeypatch):
     """The non-lite flash models allow 20 requests a day, which one eval run
     spends entirely. Both defaults have to be lite ids for the suite to be
     runnable more than once a day."""
-    config, _ = reload_with(
-        monkeypatch, CHAT_MODEL=None, JUDGE_MODEL=None, EMBEDDING_MODEL=None
-    )
+    config = defaults_for(monkeypatch, "gemini")
     assert config.CHAT_MODEL == "gemini-3.1-flash-lite"
     assert config.JUDGE_MODEL == "gemini-3.5-flash-lite"
     assert config.EMBEDDING_MODEL == "gemini-embedding-001"
+
+
+def test_openai_is_what_you_get_without_choosing(monkeypatch):
+    config = reload_with(monkeypatch, RAG_PROVIDER=None)[0]
+    assert config.RAG_PROVIDER == "openai"
+
+
+def test_no_provider_borrows_another_providers_ids(monkeypatch):
+    """The failure this stops is a Gemini id sent to OpenAI, which is a 404
+    several layers down inside somebody's question rather than a setup error.
+
+    The values are copied out rather than compared across two module handles:
+    reloading returns the same module object both times, so holding onto it
+    would compare the second provider against itself and pass regardless.
+    """
+    fields = ("CHAT_MODEL", "JUDGE_MODEL", "EMBEDDING_MODEL")
+    openai = {f: getattr(defaults_for(monkeypatch, "openai"), f) for f in fields}
+    gemini = {f: getattr(defaults_for(monkeypatch, "gemini"), f) for f in fields}
+
+    assert set(openai.values()).isdisjoint(gemini.values())
+
+
+def test_the_embedding_default_is_the_width_the_column_was_built_for(monkeypatch):
+    """text-embedding-3-small is 1536 natively and migration 0004 wrote
+    vector(1536). A default that drifted would not error -- it would fail on
+    insert, one event at a time, after paying to embed them."""
+    config = defaults_for(monkeypatch, "openai")
+    assert config.EMBEDDING_DIMENSIONS == 1536
 
 
 def test_an_unset_judge_model_keeps_its_own_default(monkeypatch):
     """It used to fall back to CHAT_MODEL. That put both jobs back in one
     quota bucket, and the judge back on its own writing, the moment the
     variable went missing -- silently, which is the worst way to lose it."""
-    config, _ = reload_with(monkeypatch, CHAT_MODEL="model-a", JUDGE_MODEL=None)
+    config, _ = reload_with(monkeypatch, RAG_PROVIDER="gemini",
+                            CHAT_MODEL="model-a", JUDGE_MODEL=None)
     assert config.JUDGE_MODEL == "gemini-3.5-flash-lite"
     assert config.JUDGE_MODEL != config.CHAT_MODEL
 
@@ -75,11 +115,13 @@ def test_an_empty_setting_is_treated_as_unset(monkeypatch):
     """An unset CI variable arrives as an empty string, not as absent, so
     os.getenv's default never fires and the model id would be ""."""
     config, _ = reload_with(
-        monkeypatch, CHAT_MODEL="", JUDGE_MODEL="", EMBEDDING_MODEL=""
+        monkeypatch, RAG_PROVIDER="", CHAT_MODEL="", JUDGE_MODEL="",
+        EMBEDDING_MODEL=""
     )
-    assert config.CHAT_MODEL == "gemini-3.1-flash-lite"
-    assert config.JUDGE_MODEL == "gemini-3.5-flash-lite"
-    assert config.EMBEDDING_MODEL == "gemini-embedding-001"
+    assert config.RAG_PROVIDER == "openai"
+    assert config.CHAT_MODEL == "gpt-4o-mini"
+    assert config.JUDGE_MODEL == "gpt-4.1-mini"
+    assert config.EMBEDDING_MODEL == "text-embedding-3-small"
 
 
 def test_the_two_providers_are_built_with_different_models(monkeypatch):

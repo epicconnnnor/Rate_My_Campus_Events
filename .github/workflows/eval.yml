@@ -75,7 +75,12 @@ jobs:
       DATABASE_HOST: localhost
       DATABASE_PORT: "5432"
       DATABASE_NAME: eval
+      # Both, so RAG_PROVIDER decides which one matters rather than the
+      # workflow. An unset secret arrives as an empty string, which the
+      # live-model gate reads as absent.
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      RAG_PROVIDER: ${{ vars.RAG_PROVIDER }}
       EMBEDDING_CACHE_PATH: app/test/fixtures/.embeddings
       # Optional override. Unset arrives here as an empty string and the
       # default in app/core/config.py applies, which is already a different

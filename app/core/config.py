@@ -68,51 +68,72 @@ APP_DESCRIPTION = "An app for students/organizers to view, rate, and comment on 
 # RAG CONFIGURATION
 # =============================================================================
 
-# Which provider backs embeddings and chat. "gemini" for real work; "fake"
-# swaps in a deterministic local stand-in so the indexer can be exercised
-# without an API key or network.
-RAG_PROVIDER = os.getenv("RAG_PROVIDER", "gemini")
+# Which provider backs embeddings and chat. "openai" and "gemini" are both
+# real; "fake" swaps in a deterministic local stand-in so the indexer can be
+# exercised without an API key or network.
+#
+# OpenAI is the default. Gemini is kept whole and working -- switching back is
+# RAG_PROVIDER=gemini and a key, with no other setting to remember, which is
+# the entire reason the model ids and the rate limits below are looked up per
+# provider rather than written down once.
+RAG_PROVIDER = os.getenv("RAG_PROVIDER") or "openai"
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 # Every one of these is read as "or", not as a getenv default: an unset CI
 # variable arrives as an empty string rather than as absent, and os.getenv's
 # default does not catch that. Asking for a model called "" is a 404 three
 # layers down.
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL") or "gemini-embedding-001"
-
-# Both generation models are Flash-Lite, and that is a quota decision rather
-# than a quality one. On the free tier every non-lite flash model -- 3.6 among
-# them -- allows 20 requests per day, and one eval run spends about 20 on its
-# own, so a single run was the whole day's budget. The lite models allow 500 a
-# day at 15 a minute, which is room to actually iterate.
 #
-# Which of the two lite ids sits here is a load decision, and the pair swapped
-# once. Answering is the heavier caller -- two calls a question, one to read it
-# and one to write the answer, against the judge's one -- so it belongs on
-# whichever model is quieter. 3.5-flash-lite was running at 14 of its 15 a
-# minute while 3.1 sat at 6, and the eval was dying partway through the nine
-# questions on 503 UNAVAILABLE, so the heavy side moved here.
-CHAT_MODEL = os.getenv("CHAT_MODEL") or "gemini-3.1-flash-lite"
+# Defaults are per provider, because a Gemini model id means nothing to OpenAI
+# and the other way round. An id set in the environment wins over both, so
+# CHAT_MODEL=gpt-4o still works with RAG_PROVIDER=openai.
+DEFAULT_MODELS = {
+    "openai": {
+        "chat": "gpt-4o-mini",
+        # A different model, for the reason below. Not a different quota:
+        # OpenAI meters the organisation rather than the model, so the split
+        # here buys independence of judgement and nothing else. That half of
+        # the argument was always the more important one.
+        "judge": "gpt-4.1-mini",
+        # 1536 natively, which is exactly the width migration 0004 wrote into
+        # the column. Requested explicitly below all the same, so a change to
+        # what the model returns by default cannot quietly widen the vector.
+        "embedding": "text-embedding-3-small",
+    },
+    "gemini": {
+        # Both Flash-Lite, and that is a quota decision rather than a quality
+        # one. On the free tier every non-lite flash model allows 20 requests
+        # per day, and one eval run spends about that on its own. Answering is
+        # the heavier caller -- two calls a question against the judge's one --
+        # so it sits on whichever of the two is quieter.
+        "chat": "gemini-3.1-flash-lite",
+        "judge": "gemini-3.5-flash-lite",
+        "embedding": "gemini-embedding-001",
+    },
+}
+
+# "fake" borrows OpenAI's names. It never sends them anywhere; they exist so
+# that a log line from a fake run still reads like a real one.
+_models = DEFAULT_MODELS.get(RAG_PROVIDER, DEFAULT_MODELS["openai"])
+
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL") or _models["embedding"]
+
+CHAT_MODEL = os.getenv("CHAT_MODEL") or _models["chat"]
 
 # The model the eval's judge reads with. Deliberately its own setting, and its
-# own default, for two reasons.
+# own default.
 #
-# Quotas are per project per model, so a different model is a different daily
-# allowance: the judge cannot be starved by a day of chat, and chat cannot be
-# starved by a day of evals.
+# It is the right shape: a judge checking an answer for invented detail should
+# not be the same model that wrote it. On Gemini it also buys a second daily
+# allowance, since quotas there are per project per model.
 #
-# It is also the right shape: a judge checking an answer for invented detail
-# should not be the same model that wrote it.
-#
-# It no longer falls back to CHAT_MODEL. That fallback existed only until a
+# It does not fall back to CHAT_MODEL. That fallback existed only until a
 # second model was chosen, and quietly collapsing the split back into one
 # bucket is the exact failure it was meant to avoid. Setting the two equal by
 # hand is still allowed, and announce_models says so out loud.
-#
-# It holds the busier of the two lite ids because it is the lighter caller: one
-# request per question, where answering costs two. See CHAT_MODEL.
-JUDGE_MODEL = os.getenv("JUDGE_MODEL") or "gemini-3.5-flash-lite"
+JUDGE_MODEL = os.getenv("JUDGE_MODEL") or _models["judge"]
 
 # Baked into the vector column type by migration 0004. Changing it is a schema
 # change plus a full re-index, not a config tweak -- keep the two in step.
@@ -138,26 +159,45 @@ EMBEDDING_CACHE_PATH = os.getenv("EMBEDDING_CACHE_PATH", "").strip()
 RETRIEVAL_TOP_K = int(os.getenv("RETRIEVAL_TOP_K", "8"))
 RETRIEVAL_MAX_DISTANCE = float(os.getenv("RETRIEVAL_MAX_DISTANCE", "0.6"))
 
-# Requests per minute for a generation call, counted per model. The Flash-Lite
-# models allow 15. The non-lite ones allow 5, so this belongs with CHAT_MODEL:
-# moving off Lite means moving this too.
+# Requests per minute, per provider. Both numbers are deliberately under the
+# published ceiling rather than on it: pacing to exactly the limit means
+# arriving at the last request of every minute with nothing left for what one
+# process cannot see -- a second job on the same key, a local run, a clock a
+# little behind the server's.
 #
-# Set below the published ceiling rather than at it. Pacing to exactly 15 meant
-# arriving at 14 and 15 of 15 every minute, with nothing left for what this
-# pacer cannot see -- another job on the same project, a local run, a clock a
-# little behind the server's. Three requests of slack is cheap: the eval's
-# burst is 18 calls, which sits out one window at 12 a minute exactly as it did
-# at 15.
+# Gemini's Flash-Lite models publish 15 a minute, hence 12. OpenAI's limits are
+# far higher -- gpt-4o-mini is in the hundreds per minute even on the smallest
+# paid tier -- so 60 is not really a constraint there, it is a brake that keeps
+# a runaway loop from spending real money before anybody notices. Raise it with
+# CHAT_REQUESTS_PER_MINUTE if a run is actually waiting on this.
 #
-# It is not a fix for the 503s. Those are capacity at the far end rather than
-# our quota, and _with_retries is what rides them out; this only stops us
-# adding to the crowd at the ceiling.
-#
-# Per model matters. Chat and judge are different models and so different
-# buckets, and one eval question costs two chat calls -- one to read the
-# question, one to write the answer -- which arrive as fast as the network
+# Per model matters. Chat and judge are different models and so, on Gemini,
+# different buckets, and one eval question costs two chat calls -- one to read
+# the question, one to write the answer -- which arrive as fast as the network
 # allows.
-CHAT_REQUESTS_PER_MINUTE = int(os.getenv("CHAT_REQUESTS_PER_MINUTE") or "12")
+CHAT_RPM_BY_PROVIDER = {"openai": 60, "gemini": 12, "fake": 100000}
+
+CHAT_REQUESTS_PER_MINUTE = int(
+    os.getenv("CHAT_REQUESTS_PER_MINUTE")
+    or CHAT_RPM_BY_PROVIDER.get(RAG_PROVIDER, 12)
+)
+
+# Documents per minute for embedding, per provider.
+#
+# Counted in documents rather than calls because that is how Google meters it:
+# one embed_content request per document, so a batch of 32 spends 32 of the
+# free tier's 100 a minute.
+#
+# OpenAI meters the embeddings endpoint by request and by token instead, and a
+# batch of 32 inputs is one request there, so counting documents over-paces --
+# on purpose. 1000 a minute is far below what the endpoint allows and still
+# fast enough that the 102 fixture events never wait at all.
+EMBEDDING_DPM_BY_PROVIDER = {"openai": 1000, "gemini": 100, "fake": 100000}
+
+EMBEDDING_DOCUMENTS_PER_MINUTE = int(
+    os.getenv("EMBEDDING_DOCUMENTS_PER_MINUTE")
+    or EMBEDDING_DPM_BY_PROVIDER.get(RAG_PROVIDER, 100)
+)
 
 # How many chat questions one user may ask per calendar day, campus time.
 CHAT_DAILY_LIMIT = int(os.getenv("CHAT_DAILY_LIMIT", "20"))

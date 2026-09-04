@@ -19,7 +19,13 @@ psycopg2-binary
 alembic==1.16.5
 pgvector==0.4.1
 
-# RAG - embeddings and chat
+# RAG - embeddings and chat.
+#
+# Both SDKs, because both providers stay working: RAG_PROVIDER picks one at
+# runtime and each is imported lazily, so the one not in use costs an unused
+# wheel and nothing else. Dropping google-genai would make switching back a
+# revert rather than a variable.
+openai==3.8.0
 google-genai==1.46.0
 
 # zoneinfo has no tz database of its own on Windows or a slim container

@@ -22,6 +22,13 @@ def main(argv: Optional[List[str]] = None) -> None:
         description="Embed every event whose document has changed."
     )
     parser.add_argument(
+        "--force",
+        action="store_true",
+        help=("re-embed every event, even unchanged ones. Needed after "
+              "changing the embedding model, which the freshness check "
+              "cannot see."),
+    )
+    parser.add_argument(
         "--provider",
         default=None,
         help="override RAG_PROVIDER for this run, e.g. 'fake'",
@@ -30,7 +37,8 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
-    stats = index_events(provider=get_embedding_provider(args.provider))
+    stats = index_events(provider=get_embedding_provider(args.provider),
+                         force=args.force)
     log.info(
         "done: %d embedded, %d already current",
         stats["embedded"],
