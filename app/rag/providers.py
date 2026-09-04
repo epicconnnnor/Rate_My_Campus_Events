@@ -22,6 +22,7 @@ log = logging.getLogger("providers")
 from app.core.config import (
     CHAT_MODEL,
     JUDGE_MODEL,
+    EMBEDDING_CACHE_PATH,
     EMBEDDING_DIMENSIONS,
     EMBEDDING_MODEL,
     GEMINI_API_KEY,
@@ -38,6 +39,14 @@ class EmbeddingProvider(Protocol):
     def embed_query(self, text: str) -> List[float]:
         """Embed a question. Kept separate because providers tune the two
         differently, even when the model is the same."""
+
+    def chargeable(self, texts: List[str]) -> int:
+        """How many of these will actually cost a request.
+
+        Everything that talks to the API answers len(texts). Only the disk
+        cache answers anything smaller, and the indexer's pacer needs to know:
+        sleeping out a quota window for documents nobody is sending is a minute
+        spent on nothing."""
 
 
 class ChatProvider(Protocol):
@@ -73,6 +82,10 @@ def announce_models() -> None:
         "rag provider=%s | embedding=%s (%d dims) | chat=%s | judge=%s",
         RAG_PROVIDER, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS, CHAT_MODEL,
         JUDGE_MODEL,
+    )
+    log.info(
+        "embedding cache: %s",
+        EMBEDDING_CACHE_PATH or "off -- every embedding is a request",
     )
     if JUDGE_MODEL == CHAT_MODEL:
         log.warning(
@@ -298,6 +311,9 @@ class GeminiEmbeddingProvider:
     def embed_query(self, text: str) -> List[float]:
         return self._embed([text], "RETRIEVAL_QUERY")[0]
 
+    def chargeable(self, texts: List[str]) -> int:
+        return len(texts)
+
 
 class GeminiChatProvider:
     def __init__(self, model: Optional[str] = None) -> None:
@@ -336,6 +352,9 @@ class FakeEmbeddingProvider:
 
     def embed_query(self, text: str) -> List[float]:
         return self._vector(text)
+
+    def chargeable(self, texts: List[str]) -> int:
+        return len(texts)
 
     @staticmethod
     def _vector(text: str) -> List[float]:
@@ -381,7 +400,21 @@ def _build(registry: dict, name: str, **kwargs):
 
 
 def get_embedding_provider(name: str = None) -> EmbeddingProvider:
-    return _build(_EMBEDDING_PROVIDERS, name or RAG_PROVIDER)
+    name = name or RAG_PROVIDER
+    provider = _build(_EMBEDDING_PROVIDERS, name)
+
+    # The fake provider is deliberately not wrapped. Its vectors cost nothing,
+    # so there is nothing to save, and caching them would leave stub vectors on
+    # disk for a real run to find.
+    if EMBEDDING_CACHE_PATH and name != "fake":
+        from app.rag.embedding_cache import CachedEmbeddingProvider
+
+        provider = CachedEmbeddingProvider(
+            provider, EMBEDDING_CACHE_PATH, EMBEDDING_MODEL,
+            EMBEDDING_DIMENSIONS,
+        )
+
+    return provider
 
 
 def get_chat_provider(name: str = None) -> ChatProvider:

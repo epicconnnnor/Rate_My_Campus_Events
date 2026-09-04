@@ -53,6 +53,21 @@ def test_staying_under_the_limit_never_waits(clock):
     assert clock.slept == []
 
 
+def test_a_cached_batch_costs_nothing(clock):
+    """The indexer reserves what will actually be sent, not what it was asked
+    for. A run answered entirely from the embedding cache used to reach 102
+    documents and sit out a quota window for requests nobody was making."""
+    pacer = _Pacer()
+    for _ in range(10):
+        pacer.reserve(0)
+    assert clock.slept == []
+
+    # And the window is still untouched, so real work after it is not paced
+    # against documents that were never sent.
+    pacer.reserve(FREE_TIER_DOCUMENTS_PER_MINUTE)
+    assert clock.slept == []
+
+
 def test_crossing_the_limit_waits_out_the_minute(clock):
     """96 documents through, then a batch that would make 102 -- which is
     exactly what killed the first eval run."""
