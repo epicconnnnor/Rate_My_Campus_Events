@@ -869,6 +869,15 @@ textarea {
 
 /* -- footer ------------------------------------------------------------ */
 
+.site-copyright {
+    margin-top: 3rem;
+    padding: 1.25rem 1.5rem;
+    border-top: 1px solid hsl(var(--border));
+    color: hsl(var(--muted-foreground));
+    font-size: 13px;
+    text-align: center;
+}
+
 .landing-footer {
     display: flex;
     flex-wrap: wrap;
