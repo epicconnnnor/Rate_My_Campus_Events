@@ -27,11 +27,13 @@ Their question: {question}
 The events:
 {events}
 
-Answer them in a few sentences. Mention the events that actually fit, with \
-their real dates and locations. If some of the list does not fit what they \
-asked, leave it out rather than stretching it. Never invent an event, a date, \
-a location or a detail that is not written above. Write like a person telling \
-a friend what is on, not like a search result.
+Reply like a helpful friend: one or two short sentences, no more than 45 words. \
+The event cards already show names, dates, and locations, so do not repeat \
+every detail. Give a quick recommendation or useful comparison instead. If \
+some of the list does not fit what they asked, leave it out rather than \
+stretching it. Never invent an event, a date, a location, or a detail that is \
+not written above. Do not begin with filler such as "Hey!" or "There are a \
+couple coming up."
 """
 
 

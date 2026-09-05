@@ -7,10 +7,11 @@ from typing import Optional
 
 import logging
 
+from app.core.config import (EVENT_ADMIN_EMAILS, EVENT_SUBMISSION_DAILY_LIMIT)
 from app.core.security import get_user_from_session
 from app.db import database as db
 from app.db.database import engine
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
+from fastapi import APIRouter, Cookie, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -26,13 +27,17 @@ templates = Jinja2Templates(directory="templates")
 
 
 async def get_current_user(
-    token: Optional[str] = Query(None),
+    access_token: Optional[str] = Cookie(None),
 ) -> Optional[dict]:
-    if not token:
+    if not access_token:
         return None
 
-    user = get_user_from_session(token, db.get_user_by_email)
+    user = get_user_from_session(access_token, db.get_user_by_email)
     return user
+
+
+def is_event_admin(user: Optional[dict]) -> bool:
+    return bool(user and user.get("email", "").casefold() in EVENT_ADMIN_EMAILS)
 
 
 # =============================================================================
@@ -89,7 +94,6 @@ def _landing_stats() -> dict:
 async def landing(
     request: Request,
     current_user: Optional[dict] = Depends(get_current_user),
-    token: Optional[str] = Query(None),
 ):
     """The first screen, and the only one that has to work signed out.
 
@@ -101,7 +105,6 @@ async def landing(
         {
             "request": request,
             "user": current_user,
-            "token": token,
             "stats": _landing_stats(),
         },
     )
@@ -116,7 +119,6 @@ async def landing(
 async def events_index(
     request: Request,
     current_user: Optional[dict] = Depends(get_current_user),
-    token: Optional[str] = Query(None),
     q: str = Query("", max_length=200),
     category: str = Query("", max_length=200),
     from_date: str = Query("", max_length=10),
@@ -189,7 +191,6 @@ async def events_index(
             "category": category,
             "from_date": from_date,
             "free": free,
-            "token": token,
         },
     )
 
@@ -203,7 +204,7 @@ async def events_index(
 async def create_event_page(
     request: Request,
     current_user: Optional[dict] = Depends(get_current_user),
-    token: Optional[str] = Query(None),
+    error: Optional[str] = Query(None),
 ):
     if not current_user:
         return RedirectResponse("/login", status_code=303)
@@ -213,7 +214,8 @@ async def create_event_page(
         {
             "request": request,
             "user": current_user,
-            "token": token,
+            "error": error,
+            "submission_limit": EVENT_SUBMISSION_DAILY_LIMIT,
         },
     )
 
@@ -226,7 +228,6 @@ async def create_event_page(
 @router.post("/event/create")
 async def create_event(
     current_user: Optional[dict] = Depends(get_current_user),
-    token: Optional[str] = Query(None),
     title: str = Form(...),
     description: str = Form(...),
     date_time: str = Form(...),
@@ -234,6 +235,20 @@ async def create_event(
 ):
     if not current_user:
         return RedirectResponse("/login", status_code=303)
+
+    title, description, location = title.strip(), description.strip(), location.strip()
+    if not (3 <= len(title) <= 120 and 10 <= len(description) <= 2_000 and 2 <= len(location) <= 160):
+        return RedirectResponse("/event/create?error=length", status_code=303)
+    try:
+        datetime.fromisoformat(date_time)
+    except ValueError:
+        return RedirectResponse("/event/create?error=date", status_code=303)
+
+    today = datetime.now().date()
+    if db.get_submission_count(current_user["user_id"], today) >= EVENT_SUBMISSION_DAILY_LIMIT:
+        return RedirectResponse("/event/create?error=limit", status_code=303)
+    if db.find_duplicate_submission(title, location, date_time):
+        return RedirectResponse("/event/create?error=duplicate", status_code=303)
 
     event = db.create_event(
         {
@@ -245,9 +260,35 @@ async def create_event(
         }
     )
 
-    if token:
-        return RedirectResponse(f"/?token={token}", status_code=303)
-    return RedirectResponse("/events", status_code=303)
+    return RedirectResponse("/event/create?error=submitted", status_code=303)
+
+
+@router.get("/admin/events", response_class=HTMLResponse)
+async def review_event_submissions(
+    request: Request,
+    current_user: Optional[dict] = Depends(get_current_user),
+):
+    if not is_event_admin(current_user):
+        raise HTTPException(status_code=403, detail="Event administrator access required")
+    return templates.TemplateResponse(
+        "admin_events.html",
+        {"request": request, "user": current_user, "events": db.list_pending_events()},
+    )
+
+
+@router.post("/admin/events/{event_id}/{decision}")
+async def review_event_submission(
+    event_id: int,
+    decision: str,
+    current_user: Optional[dict] = Depends(get_current_user),
+):
+    if not is_event_admin(current_user):
+        raise HTTPException(status_code=403, detail="Event administrator access required")
+    if decision not in {"approve", "reject"}:
+        raise HTTPException(status_code=400, detail="Unknown review decision")
+    if not db.set_event_publication_status(event_id, "published" if decision == "approve" else "rejected"):
+        raise HTTPException(status_code=404, detail="Event not found")
+    return RedirectResponse("/admin/events", status_code=303)
 
 
 # =============================================================================
@@ -260,10 +301,13 @@ async def event_detail(
     request: Request,
     event_id: int,
     current_user: Optional[dict] = Depends(get_current_user),
-    token: Optional[str] = Query(None),
 ):
     event = db.get_event(event_id)
     if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    if event["publication_status"] != "published" and not (
+        is_event_admin(current_user) or current_user and event["created_by"] == current_user["user_id"]
+    ):
         raise HTTPException(status_code=404, detail="Event not found")
 
     event["when"] = when_to_show(event)
@@ -314,7 +358,6 @@ async def event_detail(
             "creator": creator,
             "user_reaction": user_reaction,
             "comments": event_comments,
-            "token": token,
         },
     )
 
@@ -329,7 +372,6 @@ async def react_to_event(
     event_id: int,
     value: int = Form(...),
     current_user: Optional[dict] = Depends(get_current_user),
-    token: Optional[str] = Query(None),
 ):
     if not current_user:
         return RedirectResponse("/login", status_code=303)
@@ -342,8 +384,6 @@ async def react_to_event(
 
     db.upsert_reaction(event_id, current_user["user_id"], value)
 
-    if token:
-        return RedirectResponse(f"/event/{event_id}?token={token}", status_code=303)
     return RedirectResponse(f"/event/{event_id}", status_code=303)
 
 
@@ -358,7 +398,6 @@ async def htmx_react_to_event(
     event_id: int,
     value: int = Form(...),
     current_user: Optional[dict] = Depends(get_current_user),
-    token: Optional[str] = Query(None),
 ):
     if not current_user:
         raise HTTPException(status_code=401, detail="Authentication required")
@@ -404,7 +443,6 @@ async def htmx_react_to_event(
             "event": event,
             "user": current_user,
             "user_reaction": user_reaction,
-            "token": token,
         },
     )
 
@@ -419,7 +457,6 @@ async def add_comment(
     event_id: int,
     text: str = Form(...),
     current_user: Optional[dict] = Depends(get_current_user),
-    token: Optional[str] = Query(None),
 ):
     if not current_user:
         return RedirectResponse("/login", status_code=303)
@@ -429,8 +466,6 @@ async def add_comment(
 
     db.create_comment(event_id, current_user["user_id"], text)
 
-    if token:
-        return RedirectResponse(f"/event/{event_id}?token={token}", status_code=303)
     return RedirectResponse(f"/event/{event_id}", status_code=303)
 
 
@@ -440,7 +475,6 @@ async def htmx_add_comment(
     event_id: int,
     text: str = Form(...),
     current_user: Optional[dict] = Depends(get_current_user),
-    token: Optional[str] = Query(None),
 ):
     if not current_user:
         raise HTTPException(status_code=401, detail="Authentication required")
@@ -463,7 +497,6 @@ async def htmx_add_comment(
             "request": request,
             "comments": event_comments,
             "user": current_user,
-            "token": token,
         },
     )
 
@@ -478,7 +511,6 @@ async def htmx_delete_comment(
     request: Request,
     comment_id: int,
     current_user: Optional[dict] = Depends(get_current_user),
-    token: Optional[str] = Query(None),
 ):
     if not current_user:
         raise HTTPException(status_code=401, detail="Authentication required")
@@ -507,6 +539,5 @@ async def htmx_delete_comment(
             "request": request,
             "comments": event_comments,
             "user": current_user,
-            "token": token,
         },
     )

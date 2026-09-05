@@ -33,7 +33,7 @@
 
             {% if user %}
             <div class="comment-form">
-                <form hx-post="/htmx/event/{{ event.event_id }}/comment{% if token %}?token={{ token }}{% endif %}"
+                <form hx-post="/htmx/event/{{ event.event_id }}/comment"
                     hx-target="#comments-list" hx-swap="innerHTML" hx-on::after-request="this.reset()">
                     <textarea name="text" placeholder="Share your thoughts about this event..." required></textarea>
                     <button type="submit">Post Comment</button>

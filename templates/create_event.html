@@ -14,7 +14,13 @@
     <div class="container">
         <div class="form-card">
             <h1>Create New Event</h1>
-            <form method="post" action="/event/create{% if token %}?token={{ token }}{% endif %}">
+            <p class="form-help">Submissions are reviewed before they appear publicly. You can submit up to {{ submission_limit }} events each day.</p>
+            {% if error == "submitted" %}<p class="form-success">Thanks — your event was submitted for review.</p>{% endif %}
+            {% if error == "limit" %}<p class="form-error">You've reached today's submission limit. Try again tomorrow.</p>{% endif %}
+            {% if error == "duplicate" %}<p class="form-error">That event is already awaiting review or has been published.</p>{% endif %}
+            {% if error == "length" %}<p class="form-error">Use a 3–120 character title, a 10–2,000 character description, and a 2–160 character location.</p>{% endif %}
+            {% if error == "date" %}<p class="form-error">Please enter a valid date and time.</p>{% endif %}
+            <form method="post" action="/event/create">
                 <div class="form-group">
                     <label>Event Title</label>
                     <input type="text" name="title" required>
@@ -36,7 +42,7 @@
                 </div>
 
                 <button class="btn btn-success">Create Event</button>
-                <a href="/events{% if token %}?token={{ token }}{% endif %}" class="btn-secondary"
+                <a href="/events" class="btn-secondary"
                     style="display: inline-block; text-decoration: none; color: white; padding: 12px 24px; border-radius: 4px;">
                     Cancel
                 </a>
