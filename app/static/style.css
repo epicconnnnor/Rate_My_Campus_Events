@@ -673,6 +673,15 @@ textarea {
     text-align: center;
 }
 
+.landing {
+    background: linear-gradient(180deg, #fff 0%, #f5e2e2 40%, #fff 100%);
+    background-attachment: fixed;
+}
+
+.landing .site-header {
+    border-top: 5px solid #881c1c;
+}
+
 .landing-pill {
     display: inline-flex;
     align-items: center;
@@ -730,13 +739,13 @@ textarea {
 
 .landing-stat {
     padding: 1.125rem 1.25rem;
-    background: hsl(var(--primary) / 0.05);
-    border: 1px solid hsl(var(--primary) / 0.12);
+    background: #881c1c;
+    border: 1px solid #881c1c;
     border-radius: var(--radius);
 }
 
 .landing-stat-value {
-    color: hsl(var(--primary));
+    color: #fff;
     font-size: 1.75rem;
     font-weight: 700;
     line-height: 1.1;
@@ -745,7 +754,7 @@ textarea {
 
 .landing-stat-label {
     margin-top: 0.25rem;
-    color: hsl(var(--muted-foreground));
+    color: #f5dddd;
     font-size: 13px;
 }
 
@@ -767,8 +776,8 @@ textarea {
     align-items: center;
     gap: 0.4rem;
     padding: 0.625rem 0.875rem;
-    background: hsl(var(--muted));
-    border-bottom: 1px solid hsl(var(--border));
+    background: #881c1c;
+    border-bottom: 1px solid #6d1616;
 }
 
 .landing-dot {
@@ -780,7 +789,7 @@ textarea {
 
 .landing-demo-title {
     margin-left: 0.5rem;
-    color: hsl(var(--muted-foreground));
+    color: #fff;
     font-size: 12px;
 }
 
@@ -1347,7 +1356,10 @@ textarea {
 }
 
 .provider-btn {
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
     text-align: center;
     padding: 11px;
     background: hsl(var(--card));

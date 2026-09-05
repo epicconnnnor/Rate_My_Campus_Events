@@ -5,7 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Register - RateMyCampusEvents</title>
-    <link rel="stylesheet" href="/static/style.css?v=event-browser-1">
+    <link rel="stylesheet" href="/static/style.css?v=google-icon-1">
 </head>
 
 <body>
@@ -26,7 +26,7 @@
         {% if providers %}
         <div class="provider-buttons">
             {% if 'google' in providers %}
-            <a href="/auth/google" class="btn provider-btn">Continue with Google</a>
+            <a href="/auth/google" class="btn provider-btn">{% include 'fragments/google_icon.html' %} Continue with Google</a>
             {% endif %}
             {% if 'github' in providers %}
             <a href="/auth/github" class="btn provider-btn">Continue with GitHub</a>
