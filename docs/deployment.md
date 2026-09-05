@@ -6,6 +6,10 @@
 - An OpenAI or Gemini API key for chatbot search
 - A publicly reachable application URL for OAuth callbacks and health checks
 
+## Oracle Cloud
+
+For a single-instance Oracle Cloud deployment, follow the [Oracle Cloud deployment guide](../deploy/oracle/README.md). It provides the Docker Compose stack for the application, PostgreSQL with pgvector, and Caddy.
+
 ## Required configuration
 
 Set `DATABASE_USER`, `DATABASE_PASS`, `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, and a long random `SECRET_KEY` as deployment secrets. Set the API key for the selected `RAG_PROVIDER` and configure OAuth credentials only for providers you plan to offer.
