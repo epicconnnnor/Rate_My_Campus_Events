@@ -2,6 +2,10 @@
 
 RateMyCampusEvents helps UMass Amherst students discover campus events. Browse the calendar by date and category, then ask the event chatbot for recommendations grounded in the official UMass Amherst events calendar.
 
+## 🌐 Live site
+
+Try it here: [ratemycampusevents.connorchen.dev](https://ratemycampusevents.connorchen.dev)
+
 ![Event details page](docs/images/event-detail.png)
 
 ## ✨ Highlights
