@@ -42,6 +42,16 @@ ALGORITHM = "HS256"
 
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
+# Browser sessions are kept out of URLs. Leave this true in production; set it
+# to false only for a local HTTP development server.
+COOKIE_SECURE = os.getenv("COOKIE_SECURE", "true").lower() in {"1", "true", "yes"}
+EVENT_ADMIN_EMAILS = {
+    email.strip().casefold()
+    for email in os.getenv("EVENT_ADMIN_EMAILS", "").split(",")
+    if email.strip()
+}
+EVENT_SUBMISSION_DAILY_LIMIT = int(os.getenv("EVENT_SUBMISSION_DAILY_LIMIT", "3"))
+
 # =============================================================================
 # DATABASE CONFIGURATION
 # =============================================================================

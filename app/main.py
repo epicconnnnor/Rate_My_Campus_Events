@@ -3,7 +3,7 @@ from app.api.routes_chat import router as chat_router
 from app.api.routes_events import router as events_router
 import logging
 
-from app.core.config import require_secret_key
+from app.core.config import COOKIE_SECURE, require_secret_key
 from app.rag.providers import announce_models
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -24,7 +24,7 @@ announce_models()
 # Holds the OAuth state between the redirect out and the callback back.
 # Nothing else uses it; the app itself is still authenticated by JWT.
 app.add_middleware(
-    SessionMiddleware, secret_key=_secret_key, same_site="lax", https_only=False
+    SessionMiddleware, secret_key=_secret_key, same_site="lax", https_only=COOKIE_SECURE
 )
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")

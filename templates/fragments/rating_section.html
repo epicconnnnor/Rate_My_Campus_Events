@@ -20,7 +20,7 @@
     </div>
 </div>
 {% if user %}
-<form hx-post="/htmx/event/{{ event.event_id }}/react{% if token %}?token={{ token }}{% endif %}"
+<form hx-post="/htmx/event/{{ event.event_id }}/react"
     hx-target="#rating-section" hx-swap="innerHTML">
     <div class="reaction-buttons">
         <button type="submit" name="value" value="1"

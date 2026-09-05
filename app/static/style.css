@@ -878,6 +878,14 @@ textarea {
     text-align: center;
 }
 
+.form-help, .form-success, .form-error { margin: 0.5rem 0 1rem; }
+.form-help { color: hsl(var(--muted-foreground)); }
+.form-success { color: #166534; }
+.form-error { color: #b42318; }
+.submission-review { padding: 1rem 0; border-bottom: 1px solid hsl(var(--border)); }
+.submission-review h2 { margin: 0; font-size: 1.1rem; }
+.submission-review form { display: inline-block; margin-right: 0.5rem; }
+
 .landing-footer {
     display: flex;
     flex-wrap: wrap;

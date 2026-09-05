@@ -55,9 +55,9 @@ def test_public_navigation_and_signed_in_links(client):
     assert 'href="/chat"' in client.get("/events").text
     app.dependency_overrides[get_current_user] = lambda: {"name": "Test"}
     try:
-        body = client.get("/events?token=test-token").text
-        assert 'href="/?token=test-token"' in body
-        assert 'href="/chat?token=test-token"' in body
-        assert 'name="token" value="test-token"' in body
+        body = client.get("/events").text
+        assert 'href="/"' in body
+        assert 'href="/chat"' in body
+        assert "?token=" not in body
     finally:
         app.dependency_overrides.pop(get_current_user, None)

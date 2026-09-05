@@ -13,6 +13,7 @@ import logging
 from app.core.oauth import (GITHUB, GOOGLE, PROVIDERS, configured_providers,
                             is_configured, link_or_create_user, oauth,
                             profile_from_github, profile_from_google)
+from app.core.config import COOKIE_SECURE
 from app.core.security import (ACCESS_TOKEN_EXPIRE_MINUTES, authenticate_user,
                                create_access_token, hash_password)
 from app.db import database as db
@@ -25,6 +26,22 @@ log = logging.getLogger("auth")
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
+AUTH_COOKIE = "access_token"
+
+
+def login_redirect(token: str) -> RedirectResponse:
+    """Start a browser session without putting its bearer credential in a URL."""
+    response = RedirectResponse("/", status_code=303)
+    response.set_cookie(
+        AUTH_COOKIE,
+        token,
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite="lax",
+        path="/",
+    )
+    return response
 
 
 # =============================================================================
@@ -62,7 +79,7 @@ async def login_html(
         expires_delta=access_token_expires,
     )
 
-    return RedirectResponse(f"/?token={token}", status_code=303)
+    return login_redirect(token)
 
 
 # =============================================================================
@@ -140,7 +157,7 @@ async def register(
         expires_delta=access_token_expires,
     )
 
-    return RedirectResponse(f"/?token={token}", status_code=303)
+    return login_redirect(token)
 
 
 # =============================================================================
@@ -149,7 +166,9 @@ async def register(
 
 @router.get("/logout")
 async def logout():
-    return RedirectResponse("/", status_code=303)
+    response = RedirectResponse("/", status_code=303)
+    response.delete_cookie(AUTH_COOKIE, path="/")
+    return response
 
 
 # =============================================================================
@@ -211,4 +230,4 @@ async def oauth_callback(provider: str, request: Request):
         expires_delta=access_token_expires,
     )
 
-    return RedirectResponse(f"/?token={jwt_token}", status_code=303)
+    return login_redirect(jwt_token)

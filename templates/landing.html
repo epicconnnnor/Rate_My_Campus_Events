@@ -42,12 +42,12 @@
             <div class="landing-cta">
                 {% if user %}
                 <a class="button button-primary button-lg"
-                    href="/chat{% if token %}?token={{ token }}{% endif %}">Open the chat</a>
+                    href="/chat">Open the chat</a>
                 {% else %}
                 <a class="button button-primary button-lg" href="/register">Get started</a>
                 {% endif %}
                 <a class="button button-outline button-lg"
-                    href="/events{% if token %}?token={{ token }}{% endif %}">Browse events</a>
+                    href="/events">Browse events</a>
             </div>
 
             {#
@@ -181,8 +181,8 @@
     <footer class="landing-footer">
         <span>RateMyCampusEvents &mdash; a student project over the UMass Amherst events calendar.</span>
         <span class="landing-footer-links">
-            <a href="/events{% if token %}?token={{ token }}{% endif %}">Events</a>
-            <a href="/chat{% if token %}?token={{ token }}{% endif %}">Chat</a>
+            <a href="/events">Events</a>
+            <a href="/chat">Chat</a>
             {% if not user %}<a href="/login">Log in</a>{% endif %}
         </span>
         <span>&copy; 2026 Connor Chen. All rights reserved.</span>

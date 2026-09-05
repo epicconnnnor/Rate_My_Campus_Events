@@ -139,7 +139,6 @@ async def healthz():
 async def chat_page(
     request: Request,
     current_user: Optional[dict] = Depends(get_current_user),
-    token: Optional[str] = Query(None),
 ):
     if not current_user:
         return RedirectResponse("/login", status_code=303)
@@ -152,7 +151,6 @@ async def chat_page(
         {
             "request": request,
             "user": current_user,
-            "token": token,
             "used": used,
             "limit": CHAT_DAILY_LIMIT,
             "categories": _categories(),
@@ -175,7 +173,6 @@ async def chat(
     experience: Optional[str] = Form(None),
     category: Optional[str] = Form(None),
     current_user: Optional[dict] = Depends(get_current_user),
-    token: Optional[str] = Query(None),
 ):
     if not current_user:
         return templates.TemplateResponse(
@@ -265,6 +262,5 @@ async def chat(
             "events": [_for_display(match) for match in answer.matches],
             "used": used,
             "limit": CHAT_DAILY_LIMIT,
-            "token": token,
         },
     )

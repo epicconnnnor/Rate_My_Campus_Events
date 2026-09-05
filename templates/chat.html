@@ -27,7 +27,7 @@
 
         <div class="chat-composer">
             <form id="chat-form" class="card chat-composer-card"
-                hx-post="/chat{% if token %}?token={{ token }}{% endif %}" hx-target="#chat-messages"
+                hx-post="/chat" hx-target="#chat-messages"
                 hx-swap="beforeend" hx-disabled-elt="find button">
 
                 <!--

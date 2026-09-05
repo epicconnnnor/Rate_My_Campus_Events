@@ -52,6 +52,12 @@ class Event(SQLModel, table=True):
         default="user",
         sa_column=Column(Text, nullable=False, server_default="user"),
     )
+    # Imported calendar events are published immediately. Community submissions
+    # are pending until an event administrator approves them.
+    publication_status: str = Field(
+        default="published",
+        sa_column=Column(Text, nullable=False, server_default="published"),
+    )
     # Localist event id; the key ingest upserts on.
     external_id: Optional[str] = Field(
         default=None, sa_column=Column(Text, unique=True, index=True, nullable=True)

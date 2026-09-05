@@ -7,7 +7,6 @@
         <h1>Explore events</h1>
         <p class="sidebar-intro">Something for every kind of day at UMass Amherst.</p>
         <form action="/events" method="get" role="search" aria-label="Find campus events">
-            {% if token %}<input type="hidden" name="token" value="{{ token }}">{% endif %}
             <label for="event-search">Keyword search</label>
             <input id="event-search" type="search" name="q" value="{{ q }}" placeholder="Music, yoga, game night…" maxlength="200">
             <label for="event-date">From date</label>
@@ -19,13 +18,13 @@
             </select>
             <label class="free-filter"><input type="checkbox" name="free" value="1" {% if free %}checked{% endif %}> Free events only</label>
             <button class="sidebar-submit" type="submit">Show events <span aria-hidden="true">→</span></button>
-            <a class="sidebar-reset" href="/events{% if token %}?token={{ token }}{% endif %}">Reset filters</a>
+            <a class="sidebar-reset" href="/events">Reset filters</a>
         </form>
         <div class="sidebar-chat">
             <span class="sidebar-kicker">A LITTLE HELP FINDING YOUR THING</span>
             <h2>Just ask.</h2>
             <p>“What's on this weekend that isn't a lecture?”</p>
-            <a href="/chat{% if token %}?token={{ token }}{% endif %}">Open event chatbot <span aria-hidden="true">↗</span></a>
+            <a href="/chat">Open event chatbot <span aria-hidden="true">↗</span></a>
             {% if not user %}<small>Log in to start a conversation.</small>{% endif %}
         </div>
     </aside>
@@ -50,20 +49,20 @@
                 </div>
                 <div class="event-card-body">
                     <div class="event-tags">{% if event.is_free %}<span>Free</span>{% endif %}{% if event.experience == 'virtual' %}<span>Online</span>{% elif event.experience == 'hybrid' %}<span>Hybrid</span>{% endif %}</div>
-                    <h3><a href="/event/{{ event.event_id }}{% if token %}?token={{ token }}{% endif %}">{{ event.title }}</a></h3>
+                    <h3><a href="/event/{{ event.event_id }}">{{ event.title }}</a></h3>
                     <dl class="event-facts">
                         <div><dt>When</dt><dd>{{ event.when or 'Date to be announced' }}</dd></div>
                         <div><dt>Where</dt><dd>{{ event.location or ('Online' if event.experience == 'virtual' else 'Location to be announced') }}</dd></div>
                     </dl>
                     <div class="event-footer">
                         <span class="event-feedback">{% if event.total_reactions %}{{ event.total_reactions }} reaction{{ '' if event.total_reactions == 1 else 's' }}{% else %}No feedback yet{% endif %}</span>
-                        <a class="event-details-link" href="/event/{{ event.event_id }}{% if token %}?token={{ token }}{% endif %}" aria-label="View details for {{ event.title }}">View details <span aria-hidden="true">→</span></a>
+                        <a class="event-details-link" href="/event/{{ event.event_id }}" aria-label="View details for {{ event.title }}">View details <span aria-hidden="true">→</span></a>
                     </div>
                 </div>
             </article>
             {% if loop.last %}</div></section>{% endif %}
         {% else %}
-            <div class="empty-state"><h2>No events found</h2><p>Try a different search or reset your filters.</p><a class="btn" href="/events{% if token %}?token={{ token }}{% endif %}">Show all events</a></div>
+            <div class="empty-state"><h2>No events found</h2><p>Try a different search or reset your filters.</p><a class="btn" href="/events">Show all events</a></div>
         {% endfor %}
     </div>
 </main>

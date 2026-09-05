@@ -11,6 +11,7 @@ from typing import Dict, List, Optional
 
 from app.core.config import DATABASE_URL
 from app.models.event import ChatUsage, Comment, Event, Reaction, User
+from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, create_engine, select
 
@@ -98,7 +99,9 @@ def create_event(event_data: Dict) -> Dict:
             description=event_data.get("description"),
             date_time=event_data.get("date_time"),
             location=event_data.get("location"),
-            created_by=event_data["created_by"]
+            created_by=event_data["created_by"],
+            source="user",
+            publication_status="pending",
         )
         session.add(event)
         session.commit()
@@ -112,11 +115,53 @@ def get_event(event_id: int) -> Optional[Dict]:
         return event.model_dump() if event else None
 
 
-def list_events() -> List[Dict]:
+def list_events(include_pending: bool = False) -> List[Dict]:
     with get_session() as session:
-        statement = select(Event).order_by(Event.created_at.desc())
+        statement = select(Event)
+        if not include_pending:
+            statement = statement.where(Event.publication_status == "published")
+        statement = statement.order_by(Event.created_at.desc())
         events = session.exec(statement).all()
         return [event.model_dump() for event in events]
+
+
+def get_submission_count(user_id: int, day: date_type) -> int:
+    with get_session() as session:
+        statement = select(func.count()).select_from(Event).where(
+            Event.created_by == user_id,
+            func.date(Event.created_at) == day,
+        )
+        return session.exec(statement).one()
+
+
+def find_duplicate_submission(title: str, location: str, date_time: str) -> Optional[Dict]:
+    with get_session() as session:
+        statement = select(Event).where(
+            func.lower(Event.title) == title.casefold(),
+            func.lower(Event.location) == location.casefold(),
+            Event.date_time == date_time,
+        )
+        event = session.exec(statement).first()
+        return event.model_dump() if event else None
+
+
+def list_pending_events() -> List[Dict]:
+    with get_session() as session:
+        events = session.exec(
+            select(Event).where(Event.publication_status == "pending").order_by(Event.created_at.asc())
+        ).all()
+        return [event.model_dump() for event in events]
+
+
+def set_event_publication_status(event_id: int, publication_status: str) -> bool:
+    with get_session() as session:
+        event = session.get(Event, event_id)
+        if not event:
+            return False
+        event.publication_status = publication_status
+        session.add(event)
+        session.commit()
+        return True
 
 
 def update_event(event_id: int, updates: Dict) -> Optional[Dict]:
