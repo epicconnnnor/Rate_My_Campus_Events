@@ -71,6 +71,7 @@ def test_a_signed_in_visitor_is_pointed_at_the_chat(client, no_database,
 
     assert "Open the chat" in body
     assert "Get started" not in body
+    assert "Hi, Someone!" in body
 
 
 def test_the_page_never_asks_for_a_login_first(client, no_database):

@@ -8,6 +8,7 @@
             <a href="/events" {% if request.url.path == '/events' %}aria-current="page"{% endif %}>Events</a>
             <a class="site-chat" href="/chat" {% if request.url.path == '/chat' %}aria-current="page"{% endif %}>Event chatbot <span aria-hidden="true">↗</span></a>
             {% if user %}
+            <span class="site-greeting">Hi, {{ user.name }}!</span>
             <a href="/event/create">Create event</a>
             <a href="/logout">Log out</a>
             {% else %}

@@ -1426,6 +1426,7 @@ textarea {
 .site-mark { background: #881c1c; color: white; border-radius: 9px; padding: 10px 7px; font-size: 13px; letter-spacing: -1px; }
 .site-links { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .site-links a { padding: 10px 13px; color: #554747; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 6px; }
+.site-greeting { padding: 10px 5px; color: #881c1c; font-size: 14px; font-weight: 700; white-space: nowrap; }
 .site-links a:hover, .site-links a[aria-current] { background: #f6eded; color: #881c1c; }
 .site-links a.site-chat { color: #fff; background: #881c1c; }
 .site-links a.site-chat:hover { background: #6d1616; }
