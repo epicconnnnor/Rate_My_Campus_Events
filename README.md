@@ -1,10 +1,10 @@
-# RateMyCampusEvents
+# 🎓 RateMyCampusEvents
 
 RateMyCampusEvents helps UMass Amherst students discover campus events. Browse the calendar by date and category, then ask the event chatbot for recommendations grounded in the official UMass Amherst events calendar.
 
 ![Event details page](docs/images/event-detail.png)
 
-## Highlights
+## ✨ Highlights
 
 - Browse upcoming events in a chronological calendar.
 - Filter by keyword, date, category, and free admission.
@@ -13,14 +13,14 @@ RateMyCampusEvents helps UMass Amherst students discover campus events. Browse t
 - Create an account with email and password, Google, or GitHub.
 - Rate events and join the discussion with comments.
 
-## Documentation
+## 📚 Documentation
 
-- [Install and run locally](docs/installation.md)
-- [Technical architecture](docs/architecture.md)
-- [Testing guide](docs/testing.md)
-- [Deployment guide](docs/deployment.md)
+- [🛠️ Install and run locally](docs/installation.md)
+- [🏗️ Technical architecture](docs/architecture.md)
+- [🧪 Testing guide](docs/testing.md)
+- [🌐 Deployment guide](docs/deployment.md)
 
-## Built with
+## ⚙️ Built with
 
 - FastAPI and Jinja2 for server-rendered pages
 - HTMX for page interactions
@@ -28,7 +28,7 @@ RateMyCampusEvents helps UMass Amherst students discover campus events. Browse t
 - OpenAI or Google Gemini for semantic event search and responses
 - JWT and OAuth for authentication
 
-## Project layout
+## 📁 Project layout
 
 ```text
 app/          Application code: routes, database access, ingestion, search, pages, and static files
@@ -38,7 +38,7 @@ docs/         Installation, architecture, testing, and deployment documentation
 .github/      Continuous integration and scheduled workflows
 ```
 
-## Quick start
+## 🚀 Quick start
 
 See the [installation guide](docs/installation.md) for the complete setup. At a minimum, create a PostgreSQL container with pgvector, install the Python requirements, configure environment variables, run migrations, import events, and start the app.
 
@@ -48,6 +48,6 @@ uvicorn app.main:app --reload
 
 Visit [http://localhost:8000](http://localhost:8000).
 
-## Contributing
+## 🤝 Contributing
 
 Please read the [testing guide](docs/testing.md) before opening a pull request.
