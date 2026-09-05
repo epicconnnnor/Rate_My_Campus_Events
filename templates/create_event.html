@@ -1,20 +1,15 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Create Event - RateMyCampusEvents</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v=event-browser-1">
 </head>
 
 <body>
-    <div class="header">
-        <div class="nav">
-            <div class="logo">📅 RateMyCampusEvents</div>
-            <a href="/events{% if token %}?token={{ token }}{% endif %}" style="color: white; text-decoration: none;">
-                ← Back
-            </a>
-        </div>
-    </div>
+    {% include 'fragments/site_nav.html' %}
 
     <div class="container">
         <div class="form-card">

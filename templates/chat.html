@@ -5,19 +5,12 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Ask about events - RateMyCampusEvents</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v=event-browser-1">
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
 </head>
 
 <body class="chat-page">
-    <header class="chat-topbar">
-        <div class="chat-brand">RateMyCampusEvents</div>
-        <div class="chat-topbar-actions">
-            <span class="chat-chips-label">{{ user.name }}</span>
-            <a href="/events{% if token %}?token={{ token }}{% endif %}" class="button button-ghost">All events</a>
-            <a href="/logout" class="button button-ghost">Log out</a>
-        </div>
-    </header>
+    {% include 'fragments/site_nav.html' %}
 
     <main class="chat-shell">
         <h1 class="chat-heading">Ask about events</h1>
@@ -25,15 +18,6 @@
             Try &ldquo;what&rsquo;s on this weekend that isn&rsquo;t a lecture&rdquo;
             or &ldquo;free things to do next week&rdquo;.
         </p>
-
-        {% if demo_date %}
-        <p class="chat-demo-note">
-            <strong>Demo mode.</strong> DEMO_DATE is set, so &ldquo;today&rdquo;
-            is {{ demo_date.strftime('%A %B %d, %Y') }} rather than the real
-            date. Questions about &ldquo;this weekend&rdquo; are answered
-            against that day. Unset DEMO_DATE for the real calendar.
-        </p>
-        {% endif %}
 
         <!--
             Answers are appended here, not swapped over the top of each other,

@@ -16,7 +16,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import text
 
 from app.api.routes_events import get_current_user
-from app.core.config import CHAT_DAILY_LIMIT, DEMO_DATE
+from app.core.config import CHAT_DAILY_LIMIT
 from app.db import database as db
 from app.db.database import engine
 from app.rag.answer import answer_question
@@ -156,9 +156,6 @@ async def chat_page(
             "used": used,
             "limit": CHAT_DAILY_LIMIT,
             "categories": _categories(),
-            # Shown in the page when it is set, so a demo that is standing in
-            # September 2026 says so rather than quietly lying about "today".
-            "demo_date": DEMO_DATE,
         },
     )
 

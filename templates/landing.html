@@ -5,7 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>RateMyCampusEvents - ask about what's on at UMass</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v=maroon-landing-2">
 </head>
 
 {#
@@ -16,28 +16,7 @@
 #}
 
 <body class="landing">
-    <header class="landing-nav">
-        <a class="landing-brand" href="/">
-            <span class="landing-mark" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="3" y="4" width="18" height="18" rx="2" />
-                    <path d="M16 2v4M8 2v4M3 10h18" />
-                </svg>
-            </span>
-            <span>RateMyCampusEvents</span>
-        </a>
-
-        <nav class="landing-nav-actions">
-            <a class="button button-ghost" href="/events{% if token %}?token={{ token }}{% endif %}">Browse events</a>
-            {% if user %}
-            <a class="button button-primary" href="/chat{% if token %}?token={{ token }}{% endif %}">Open the chat</a>
-            {% else %}
-            <a class="button button-ghost" href="/login">Log in</a>
-            <a class="button button-primary" href="/register">Get started</a>
-            {% endif %}
-        </nav>
-    </header>
+    {% include 'fragments/site_nav.html' %}
 
     <main>
         <section class="landing-hero">
