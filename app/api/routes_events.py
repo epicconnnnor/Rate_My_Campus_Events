@@ -2,7 +2,7 @@
 This module defines all event-related routes for RateMyCampusEvents.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 import logging
@@ -117,11 +117,54 @@ async def events_index(
     request: Request,
     current_user: Optional[dict] = Depends(get_current_user),
     token: Optional[str] = Query(None),
+    q: str = Query("", max_length=200),
+    category: str = Query("", max_length=200),
+    from_date: str = Query("", max_length=10),
+    free: bool = Query(False),
 ):
+    try:
+        first_date = date.fromisoformat(from_date) if from_date else None
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Use YYYY-MM-DD for the date")
     all_events = db.list_events()
+    categories = sorted({kind for event in all_events
+                         for kind in (event.get("event_types") or [])})
+    query = q.strip().casefold()
+    all_events = [event for event in all_events
+                  if (not category or category in (event.get("event_types") or []))
+                  and (not free or event.get("is_free") is True)
+                  and (not query or query in " ".join(
+                      str(event.get(field) or "")
+                      for field in ("title", "description", "location")
+                  ).casefold())]
+
+    from app.rag.retriever import CAMPUS_TZ
 
     for event in all_events:
         event["when"] = when_to_show(event)
+
+        starts = event.get("starts_at")
+        if not starts and event.get("date_time"):
+            try:
+                starts = datetime.fromisoformat(event["date_time"])
+            except ValueError:
+                pass
+        if starts:
+            if starts.tzinfo is None:
+                starts = starts.replace(tzinfo=CAMPUS_TZ)
+            starts = starts.astimezone(CAMPUS_TZ)
+        event["display_start"] = starts
+        event["month_label"] = starts.strftime("%B %Y") if starts else "Dates to be announced"
+
+    if first_date:
+        all_events = [event for event in all_events
+                      if event["display_start"] and event["display_start"].date() >= first_date]
+
+    all_events.sort(key=lambda event: (
+        event["display_start"] is None,
+        event["display_start"].timestamp() if event["display_start"] else 0,
+        event["title"].casefold(),
+    ))
 
     # Calculate ratings
     for event in all_events:
@@ -141,6 +184,11 @@ async def events_index(
             "request": request,
             "user": current_user,
             "events": all_events,
+            "categories": categories,
+            "q": q,
+            "category": category,
+            "from_date": from_date,
+            "free": free,
             "token": token,
         },
     )

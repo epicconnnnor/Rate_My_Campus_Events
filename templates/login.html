@@ -1,14 +1,17 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Login - RateMyCampusEvents</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v=event-browser-1">
 </head>
 
 <body>
+    {% include 'fragments/site_nav.html' %}
     <div class="login-container">
-        <h1>📅 Login</h1>
+        <h1>Welcome back</h1>
 
         {% if error %}
         <div class="auth-error">

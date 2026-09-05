@@ -5,19 +5,12 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Ask about events - RateMyCampusEvents</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v=event-browser-1">
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
 </head>
 
 <body class="chat-page">
-    <header class="chat-topbar">
-        <div class="chat-brand">RateMyCampusEvents</div>
-        <div class="chat-topbar-actions">
-            <span class="chat-chips-label">{{ user.name }}</span>
-            <a href="/events{% if token %}?token={{ token }}{% endif %}" class="button button-ghost">All events</a>
-            <a href="/logout" class="button button-ghost">Log out</a>
-        </div>
-    </header>
+    {% include 'fragments/site_nav.html' %}
 
     <main class="chat-shell">
         <h1 class="chat-heading">Ask about events</h1>

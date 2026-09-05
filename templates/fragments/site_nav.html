@@ -1,0 +1,19 @@
+<header class="site-header">
+    <nav class="site-nav" aria-label="Main navigation">
+        <a class="site-brand" href="/{% if token %}?token={{ token }}{% endif %}">
+            <span class="site-mark" aria-hidden="true">RM</span> RateMyCampusEvents
+        </a>
+        <div class="site-links">
+            <a href="/{% if token %}?token={{ token }}{% endif %}" {% if request.url.path == '/' %}aria-current="page"{% endif %}>Home</a>
+            <a href="/events{% if token %}?token={{ token }}{% endif %}" {% if request.url.path == '/events' %}aria-current="page"{% endif %}>Events</a>
+            <a class="site-chat" href="/chat{% if token %}?token={{ token }}{% endif %}" {% if request.url.path == '/chat' %}aria-current="page"{% endif %}>Event chatbot <span aria-hidden="true">↗</span></a>
+            {% if user %}
+            <a href="/event/create{% if token %}?token={{ token }}{% endif %}">Create event</a>
+            <a href="/logout">Log out</a>
+            {% else %}
+            <a href="/login" {% if request.url.path == '/login' %}aria-current="page"{% endif %}>Log in</a>
+            <a href="/register" {% if request.url.path == '/register' %}aria-current="page"{% endif %}>Sign up</a>
+            {% endif %}
+        </div>
+    </nav>
+</header>
