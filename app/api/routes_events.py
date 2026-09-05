@@ -8,6 +8,7 @@ from typing import Optional
 import logging
 
 from app.core.config import (EVENT_ADMIN_EMAILS, EVENT_SUBMISSION_DAILY_LIMIT)
+from app.core.event_description import render_event_description
 from app.core.security import get_user_from_session
 from app.db import database as db
 from app.db.database import engine
@@ -19,6 +20,7 @@ log = logging.getLogger("events")
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
+templates.env.filters["event_description"] = render_event_description
 
 
 # =============================================================================
@@ -38,6 +40,20 @@ async def get_current_user(
 
 def is_event_admin(user: Optional[dict]) -> bool:
     return bool(user and user.get("email", "").casefold() in EVENT_ADMIN_EMAILS)
+
+
+def add_rating_summary(event: dict, reactions: list[dict]) -> None:
+    """Turn simple up/down votes into the familiar 0–10 score people expect."""
+    thumbs_up = sum(reaction["value"] == 1 for reaction in reactions)
+    thumbs_down = sum(reaction["value"] == -1 for reaction in reactions)
+    total = len(reactions)
+
+    event["thumbs_up"] = thumbs_up
+    event["thumbs_down"] = thumbs_down
+    event["total_reactions"] = total
+    event["rating_score"] = round((thumbs_up / total) * 10, 1) if total else None
+    event["thumbs_up_percent"] = round((thumbs_up / total) * 100) if total else 0
+    event["thumbs_down_percent"] = round((thumbs_down / total) * 100) if total else 0
 
 
 # =============================================================================
@@ -170,15 +186,7 @@ async def events_index(
 
     # Calculate ratings
     for event in all_events:
-        event_reactions = db.get_reactions_for_event(event["event_id"])
-        if event_reactions:
-            avg = sum(r["value"]
-                      for r in event_reactions) / len(event_reactions)
-            event["avg_rating"] = round(avg, 1)
-            event["total_reactions"] = len(event_reactions)
-        else:
-            event["avg_rating"] = 0
-            event["total_reactions"] = 0
+        add_rating_summary(event, db.get_reactions_for_event(event["event_id"]))
 
     return templates.TemplateResponse(
         "index.html",
@@ -315,22 +323,7 @@ async def event_detail(
     creator = db.get_user_by_id(event["created_by"])
 
     event_reactions = db.get_reactions_for_event(event_id)
-    if event_reactions:
-        avg_rating = sum(r["value"]
-                         for r in event_reactions) / len(event_reactions)
-        event["avg_rating"] = round(avg_rating, 1)
-        event["total_reactions"] = len(event_reactions)
-
-        rating_counts = {1: 0, -1: 0}
-        for r in event_reactions:
-            rating_counts[r["value"]] = rating_counts.get(r["value"], 0) + 1
-        event["thumbs_up"] = rating_counts.get(1, 0)
-        event["thumbs_down"] = rating_counts.get(-1, 0)
-    else:
-        event["avg_rating"] = 0
-        event["total_reactions"] = 0
-        event["thumbs_up"] = 0
-        event["thumbs_down"] = 0
+    add_rating_summary(event, event_reactions)
 
     user_reaction = None
     if current_user:
@@ -411,24 +404,8 @@ async def htmx_react_to_event(
 
     db.upsert_reaction(event_id, current_user["user_id"], value)
 
-    # Recalculate ratings
     event_reactions = db.get_reactions_for_event(event_id)
-    if event_reactions:
-        avg_rating = sum(r["value"]
-                         for r in event_reactions) / len(event_reactions)
-        event["avg_rating"] = round(avg_rating, 1)
-        event["total_reactions"] = len(event_reactions)
-
-        rating_counts = {1: 0, -1: 0}
-        for r in event_reactions:
-            rating_counts[r["value"]] = rating_counts.get(r["value"], 0) + 1
-        event["thumbs_up"] = rating_counts.get(1, 0)
-        event["thumbs_down"] = rating_counts.get(-1, 0)
-    else:
-        event["avg_rating"] = 0
-        event["total_reactions"] = 0
-        event["thumbs_up"] = 0
-        event["thumbs_down"] = 0
+    add_rating_summary(event, event_reactions)
 
     user_reaction = next(
         (r for r in event_reactions if r.get(

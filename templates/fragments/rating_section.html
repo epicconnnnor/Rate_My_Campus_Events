@@ -1,10 +1,12 @@
 <div class="rating-display">
-    <div class="big-rating">{{ event.avg_rating }}</div>
+    <div class="big-rating">
+        {% if event.rating_score is not none %}{{ event.rating_score }}/10{% else %}<span class="no-rating">No ratings yet</span>{% endif %}
+    </div>
     <div class="rating-breakdown">
         <div class="rating-bar">
             <div class="rating-icon">👍</div>
             <div class="bar">
-                <div class="bar-fill">
+                <div class="bar-fill" style="width: {{ event.thumbs_up_percent }}%">
                 </div>
             </div>
             <div class="rating-count">{{ event.thumbs_up }}</div>
@@ -12,7 +14,7 @@
         <div class="rating-bar">
             <div class="rating-icon">👎</div>
             <div class="bar">
-                <div class="bar-fill">
+                <div class="bar-fill" style="width: {{ event.thumbs_down_percent }}%">
                 </div>
             </div>
             <div class="rating-count">{{ event.thumbs_down }}</div>

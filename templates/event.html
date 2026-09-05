@@ -18,7 +18,7 @@
             <div class="event-meta">📆 {{ event.when or 'Date to be announced' }}</div>
             <div class="event-meta">📍 {{ event.location }}</div>
             <div class="event-meta">👤 Organized by {{ creator.name if creator else 'Unknown' }}</div>
-            <div class="event-description">{{ event.description }}</div>
+            <div class="event-description">{{ event.description | event_description }}</div>
         </div>
 
         <div class="rating-section">

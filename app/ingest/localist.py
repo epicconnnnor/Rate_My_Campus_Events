@@ -13,9 +13,12 @@ is what last_seen_at records.
 
 import argparse
 import logging
+import re
 from collections import Counter
 from datetime import datetime, timezone
+from html.parser import HTMLParser
 from typing import Dict, List, Optional
+from urllib.parse import urlparse
 
 import requests
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -118,6 +121,55 @@ def _location(raw: Dict) -> Optional[str]:
     return ", ".join(part for part in parts if part) or None
 
 
+class _DescriptionParser(HTMLParser):
+    """Turn Localist's HTML into safe text while keeping readable spacing."""
+
+    BLOCK_TAGS = {"article", "div", "h1", "h2", "h3", "h4", "li", "p", "section"}
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: List[str] = []
+        self.links = []
+
+    def handle_starttag(self, tag: str, attrs) -> None:
+        if tag == "br":
+            self.parts.append("\n")
+        elif tag in self.BLOCK_TAGS:
+            self.parts.append("\n\n")
+            if tag == "li":
+                self.parts.append("• ")
+        elif tag == "a":
+            self.links.append((len(self.parts), dict(attrs).get("href")))
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in self.BLOCK_TAGS:
+            self.parts.append("\n\n")
+        elif tag == "a" and self.links:
+            start, href = self.links.pop()
+            parsed = urlparse(href or "")
+            label = "".join(self.parts[start:]).strip()
+            if label and parsed.scheme in {"http", "https"} and parsed.netloc:
+                self.parts[start:] = [f"[{label}]({href})"]
+
+    def handle_data(self, data: str) -> None:
+        self.parts.append(data)
+
+
+def _description(raw: Dict) -> Optional[str]:
+    """Keep paragraphs from the calendar rather than flattening them into one wall."""
+    html = raw.get("description")
+    if not html:
+        return raw.get("description_text")
+
+    parser = _DescriptionParser()
+    parser.feed(html)
+    parser.close()
+    lines = [re.sub(r"\s+", " ", line).strip() for line in "".join(parser.parts).splitlines()]
+    text = "\n".join(lines)
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+    return text or raw.get("description_text")
+
+
 def parse_event(raw: Dict) -> Dict:
     """Map one Localist event onto our columns."""
     instances = raw.get("event_instances") or []
@@ -127,8 +179,7 @@ def parse_event(raw: Dict) -> Dict:
     return {
         "external_id": str(raw["id"]),
         "title": raw.get("title"),
-        # description_text, not description -- the latter is HTML.
-        "description": raw.get("description_text"),
+        "description": _description(raw),
         "location": _location(raw),
         "starts_at": _parse_timestamp(first.get("start")),
         "ends_at": _parse_timestamp(first.get("end")),

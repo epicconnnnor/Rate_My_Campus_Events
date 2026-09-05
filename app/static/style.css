@@ -289,7 +289,11 @@ h1 {
     color: hsl(var(--foreground));
     line-height: 1.5;
     margin-bottom: 16px;
+    white-space: pre-line;
 }
+.event-description p { margin: 0 0 1.25rem; }
+.event-description p:last-child { margin-bottom: 0; }
+.event-description a { color: #881c1c; font-weight: 650; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 
 .event-footer {
     display: flex;
@@ -407,6 +411,7 @@ textarea {
     font-weight: 600;
     color: hsl(var(--foreground));
 }
+.no-rating { font-size: 18px; color: hsl(var(--muted-foreground)); }
 
 .rating-breakdown {
     flex: 1;
